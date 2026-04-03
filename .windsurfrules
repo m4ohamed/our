@@ -1,0 +1,57 @@
+# our_love_story — Project Memory
+# Auto-synced | 208 observations
+
+**Stack:** Dart · Flutter
+
+# 🏛️ CORE ARCHITECTURE
+
+> **CRITICAL:** The following rules represent strict architectural boundaries defined by the user. NEVER violate them in your generated code or explanations.
+
+# Intellectual Property & Architecture Rules
+Write your strict architectural boundaries here. 
+BrainSync will automatically enforce these rules across all agents (Cursor, Windsurf, Cline) 
+and inject them into the memory context.
+
+Example:
+- NEVER use TailwindCSS. Only use vanilla CSS.
+- NEVER write class components. Only use functional React components.
+
+# 🛡️ GLOBAL SAFETY RULES
+
+- **NEVER** run `git clean -fd` or `git reset --hard` without checking `git log` and verifying commits exist.
+- **NEVER** delete untracked files or folders blindly. Always backup or stash before bulk edits.
+
+# 🧭 ACTIVE CONTEXT
+
+> Always read `.cursor/active-context.md` for exact instructions on the specific file you are currently editing. It updates dynamically.
+
+# 🔴 CRITICAL — DO NOT IGNORE
+
+- **Dispose controllers in StatefulWidget.dispose()** — Dispose controllers in StatefulWidget.dispose()
+- **Handle null safety properly — don't use ! unless truly guaranteed** — Handle null safety properly — don't use ! unless truly guaranteed
+- **Dispose controllers in StatefulWidget.dispose()** — Dispose controllers in StatefulWidget.dispose()
+- **Agent: follow existing project patterns — don't introduce a different style** — Agent: follow existing project patterns — don't introduce a different style
+- **Agent: don't generate code with "any" type — define proper TypeScript types** — Agent: don't generate code with "any" type — define proper TypeScript types
+
+# 📐 Conventions
+
+- Use MediaQuery for responsive layouts
+- Use Theme.of(context) for consistent styling
+- Use BLoC or Riverpod for state management, not raw setState for complex state
+- Use const constructors wherever possible — improves rebuild performance
+- Don't nest widgets more than 4 levels deep — extract into separate widgets
+- Use const constructors wherever possible — improves rebuild performance
+- Version your API from day 1 (/api/v1/)
+- Use consistent response format across all endpoints
+
+# ⚡ Available Tools (ON-DEMAND only)
+- `save(title, content, category)` — Save a note + auto-detect conflicts
+- `batch_save(items[])` — Save multiple notes in 1 call
+- `query(text)` — Search memory for architecture, past fixes, decisions
+- `search(text)` — Full-text search for details
+- `check_errors()` — Check compiler errors after edits
+
+> ℹ️ DO NOT call get_context() or get_gotchas() at startup — context above IS your context.
+
+---
+*Auto-synced | 2026-04-03*

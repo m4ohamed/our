@@ -1,0 +1,18 @@
+{
+  "servers": {
+    "brainsync": {
+      "command": "node",
+      "args": [
+        "c:\\Users\\m4oha\\.antigravity\\extensions\\dawoodahmad.brainsync-2.2.6-universal\\dist\\mcp-server.js",
+        "--db",
+        "C:\\Users\\m4oha\\.brainsync\\our-love-story-375c2347\\memory.db"
+      ],
+      "type": "stdio",
+      "env": {
+        "NEMOTRON_API_KEY": "",
+        "NEMOTRON_ENDPOINT": "https://api.ollama.com",
+        "NEMOTRON_MODEL": "nemotron-3-super:cloud"
+      }
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "flutter": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T10:00:38.884Z",
+    "observationCount": 65,
+    "skillCount": 0,
+    "domain": "flutter",
+    "triggerGlobs": [
+      "**/*.dart"
+    ],
+    "description": "Flutter for our_love_story. 2 gotchas, 6 conventions, 17 fixes."
+  },
+  "project": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T10:00:38.882Z",
+    "observationCount": 98,
+    "skillCount": 0,
+    "domain": "project",
+    "triggerGlobs": [
+      "**/*"
+    ],
+    "description": "Project for our_love_story. 22 gotchas, 37 conventions, 7 fixes."
+  },
+  "config": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T10:00:38.885Z",
+    "observationCount": 43,
+    "skillCount": 0,
+    "domain": "config",
+    "triggerGlobs": [
+      "**/*.yaml",
+      "**/*.yml",
+      "**/*.json",
+      "**/*.toml"
+    ],
+    "description": "Config for our_love_story. 7 conventions."
+  },
+  "problem-fix": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T10:00:38.886Z",
+    "observationCount": 0,
+    "skillCount": 1,
+    "domain": "problem-fix",
+    "triggerGlobs": [
+      "**/*"
+    ],
+    "description": "Problem Fix for our_love_story. ."
+  },
+  "gotcha": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T10:00:38.889Z",
+    "observationCount": 0,
+    "skillCount": 1,
+    "domain": "gotcha",
+    "triggerGlobs": [
+      "**/*"
+    ],
+    "description": "Gotcha for our_love_story. ."
+  },
+  "convention": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T10:00:38.891Z",
+    "observationCount": 0,
+    "skillCount": 1,
+    "domain": "convention",
+    "triggerGlobs": [
+      "**/*"
+    ],
+    "description": "Convention for our_love_story. ."
+  },
+  "decision": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T10:00:38.892Z",
+    "observationCount": 0,
+    "skillCount": 1,
+    "domain": "decision",
+    "triggerGlobs": [
+      "**/*"
+    ],
+    "description": "Decision for our_love_story. ."
+  }
+}
