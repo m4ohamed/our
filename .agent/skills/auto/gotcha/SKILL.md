@@ -1,6 +1,6 @@
 ---
 name: gotcha
-description: "Gotcha for our_love_story. ."
+description: "Gotcha for our. ."
 domain: gotcha
 triggers:
   - glob: "**/*"
@@ -10,7 +10,7 @@ enabled: true
 
 # Gotcha
 
-Auto-compiled from **1 real patterns** in **our_love_story**. This skill is auto-routed to agents when working on gotcha files.
+Auto-compiled from **1 real patterns** in **our**. This skill is auto-routed to agents when working on gotcha files.
 
 ## 📐 Conventions & Best Practices
 

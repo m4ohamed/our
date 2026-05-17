@@ -1,6 +1,6 @@
 ---
 name: project
-description: "Project for our_love_story. 22 gotchas, 37 conventions, 7 fixes."
+description: "Project for our. 22 gotchas, 54 conventions, 18 fixes."
 domain: project
 triggers:
   - glob: "**/*"
@@ -10,7 +10,7 @@ enabled: true
 
 # Project
 
-Auto-compiled from **98 real patterns** in **our_love_story**. This skill is auto-routed to agents when working on project files.
+Auto-compiled from **225 real patterns** in **our**. This skill is auto-routed to agents when working on project files.
 
 ## ⚠️ Anti-Patterns & Gotchas
 
@@ -42,6 +42,158 @@ Auto-compiled from **98 real patterns** in **our_love_story**. This skill is aut
 | Never force push to main, master, or production br | Never force push to main, master, or production branches |
 
 ## 🔧 Problem Playbooks
+
+### problem-fix in task.md
+- # Tasks for localization and cleanup
++ # Baby Moaz Countdown Implementation
+- - [x] Enable Flutter Localization in `pubspec.yaml`
++ - [ ] Add baby-related constants to `AppConstants`
+- - [x] Create `l10n.yaml` configuration
++ - [ ] Add localization strings (EN/AR)
+- - [x] Create ARB files
++ - [ ] Implement `BabyCountdownScreen` with specialized boy-themed UI
+-   - [x] `lib/l10n/app_ar.ar
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in task.md.resolved
+- - [/ ] Un-hardcode Theme Usage (Light/Dark Mode Support)
++ - [x] Un-hardcode Theme Usage (Light/Dark Mode Support)
+-   - [/ ] Refactor [SettingsScreen](file:///c:/Users/m4oha/OneDrive/Desktop/our_love_story/lib/presentation/screens/settings_screen.dart#14-43) to use `Theme.of(context)`
++   - [x] Refactor [SettingsScreen](file:///c:/Users/m4oha/OneDrive/Desktop/our_love_story/lib/presentation/
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in task.md
+File updated (external): c:\Users\m4oha\.gemini\antigravity\brain\b6208d44-487c-4480-9035-7205355048b1\task.md
+
+Content summary (8 lines):
+# Task: Fix constant expression errors in surprise_screen.dart
+
+- [ ] Create implementation plan [x]
+- [ ] Remove `const` from `Icon` at line 85 [ ]
+- [ ] Remove `const` from `BoxDecoration` at line 97 [ ]
+- [ ] Remove `const` from `Icon` at line 213 [ ]
+
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in intl_ar.arb
+- {
++ 
+-     "@@locale": "ar",
+-     "appName": "قصة حبنا",
+-     "coupleName": "محمد ❤️ سارة",
+-     "daysTogether": "{days} يوم معاً",
+-     "@daysTogether": {
+-         "description": "Number of days the couple has been together",
+-         "placeholders": {
+-             "days": {
+-                 "type": "int"
+-             }
+-         }
+-     },
+-     "weddingCountdown": "العد 
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in app_en.arb
+- {
++ 
+-     "@@locale": "en",
+-     "appName": "Our Love Story",
+-     "coupleName": "Mohamed ❤️ Sara",
+-     "daysTogether": "{days} Days Together",
+-     "@daysTogether": {
+-         "description": "Number of days the couple has been together",
+-         "placeholders": {
+-             "days": {
+-                 "type": "int"
+-             }
+-         }
+-     },
+-     "weddingCoun
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in task.md
+- # Tasks
++ # Tasks for Audio Integration
+- - [x] Resolve Dependency Conflict (Hive vs Custom Lint)
++ - [ ] Add Audio Assets to `AppConstants`
+- - [x] Correct Clean Architecture Structure
++ - [ ] Implement `GlobalAudioNotifier` using `audioplayers`
+- - [x] Implement `Result.when` and fix Notifier overrides
++   - [ ] Support background music loop
+- - [x] Resolve all Presentation Layer impor
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in task.md.resolved
+- # Tasks
++ # Tasks
+- 
++ 
+- - [/] Research compatible versions for `custom_lint` and `hive_ce_generator`
++ - [x] Research compatible versions for `custom_lint` and `hive_ce_generator`
+- - [ ] Update [pubspec.yaml](file:///c:/Users/m4oha/OneDrive/Desktop/our_love_story/pubspec.yaml) with compatible versions 
++ - [/] Update [pubspec.yaml](file:///c:/Users/m4oha/OneDrive/Desktop/our_love_story/pub
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in implementation_plan.md
+File updated (external): c:\Users\m4oha\.gemini\antigravity\brain\73fb4392-a36d-40f7-b6c2-cdd559554629\implementation_plan.md
+
+Content summary (33 lines):
+# Fix Import Errors and Project Structure
+
+The project currently suffers from multiple "Target of URI doesn't exist" errors, specifically regarding `event_mapper.dart` and several repository interfaces. This is due to incorrect relative paths 
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in task.md
+File updated (external): c:\Users\m4oha\.gemini\antigravity\brain\73fb4392-a36d-40f7-b6c2-cdd559554629\task.md
+
+Content summary (8 lines):
+# Fixing Import Error
+
+The user reported an import error in `hive_timeline_repository.dart` where the path `../../../mappers/event_mapper.dart` points to a non-existent location.
+
+- [/] [PLAN] Verify current import path and file structure
+- [ ] [EXECUTION]
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in task.md
+- - [ ] Search for compatible versions of `hive_generator` and `custom_lint` <!-- id: 0 -->
++ - [x] Search for compatible versions of `hive_generator` and `custom_lint` <!-- id: 0 -->
+- - [ ] Update `pubspec.yaml` with compatible versions <!-- id: 1 -->
++ - [/] Update `pubspec.yaml` and imports with `hive_ce` <!-- id: 1 -->
+
+📌 IDE AST Context: Modified symbols likely include [# Task: Resolve 
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### problem-fix in implementation_plan.md
+File updated (external): c:\Users\m4oha\.gemini\antigravity\brain\95461ecf-b6a1-431e-8531-577ca97ca6f6\implementation_plan.md
+
+Content summary (44 lines):
+# Resolve Dependency Conflict: Migrate to Hive CE
+
+The project currently has a dependency conflict between `hive_generator` and `custom_lint` due to incompatible `analyzer` version requirements. `hive_generator` (v2.0.1) requires `analyzer <7.
+
+**Actionable Steps:**
+1. Modified 1 files
 
 ### problem-fix in task.md.resolved
 - - [/] Fix deprecated `withOpacity` usage (use `withValues`)
@@ -141,53 +293,6 @@ I have successfully updated all dependencies in `pubspec.yaml` to their latest s
 ## 📐 Conventions & Best Practices
 
 ### Project Conventions
-- 📐 **Updated a database schema — confirmed 4x** — - # Redesign Plan: Premium Love Story Experience
-+ # Redesign Plan: Ethereal Romance Experience
-- 
-- 📐 **Optimized Radio — confirmed 4x** — - - [ ] Fix deprecated `Radio` parameters (`groupValue`, `onChanged`)
-+ - [x] Fix deprecated `Radio
-- 📐 **problem-fix in task.md.resolved — confirmed 4x** — - - [ ] Fix deprecated `Radio` parameters (`groupValue`, `onChanged`)
-+ - [x] Fix deprecated `Radio
-- 📐 **problem-fix in task.md — confirmed 4x** — - - [ ] Fix deprecated `Radio` parameters (`groupValue`, `onChanged`)
-+ - [x] Fix deprecated `Radio
-- 📐 **Use MediaQuery for responsive layouts** — Use MediaQuery for responsive layouts
-- 📐 **Use Theme.of(context) for consistent styling** — Use Theme.of(context) for consistent styling
-- 📐 **Use BLoC or Riverpod for state management, not raw setState for complex state** — Use BLoC or Riverpod for state management, not raw setState for complex state
-- 📐 **Use const constructors wherever possible — improves rebuild performance** — Use const constructors wherever possible — improves rebuild performance
-- 📐 **Don't nest widgets more than 4 levels deep — extract into separate widgets** — Don't nest widgets more than 4 levels deep — extract into separate widgets
-- 📐 **Use const constructors wherever possible — improves rebuild performance** — Use const constructors wherever possible — improves rebuild performance
-- 📐 **Version your API from day 1 (/api/v1/)** — Version your API from day 1 (/api/v1/)
-- 📐 **Use consistent response format across all endpoints** — Use consistent response format across all endpoints
-- 📐 **Implement soft delete for important data — don't hard delete without confirmation** — Implement soft delete for important data — don't hard delete without confirmation
-- 📐 **Handle timezone correctly — store UTC, display in user's timezone** — Handle timezone correctly — store UTC, display in user's timezone
-- 📐 **Make layouts responsive from the start — mobile-first approach** — Make layouts responsive from the start — mobile-first approach
-- 📐 **Disable submit button during form submission — prevent double-submit** — Disable submit button during form submission — prevent double-submit
-- 📐 **Always add empty states ("No items yet" with call-to-action)** — Always add empty states ("No items yet" with call-to-action)
-- 📐 **Always add error states with retry button — not just blank screen** — Always add error states with retry button — not just blank screen
-- 📐 **Always add loading states for async operations (skeleton, spinner)** — Always add loading states for async operations (skeleton, spinner)
-- 📐 **Test edge cases: empty input, null, boundary values, error scenarios** — Test edge cases: empty input, null, boundary values, error scenarios
-- 📐 **Each test should be independent — no shared mutable state between tests** — Each test should be independent — no shared mutable state between tests
-- 📐 **Write tests for business logic — test behavior/output, not implementation details** — Write tests for business logic — test behavior/output, not implementation details
-- 📐 **Close resources (streams, connections, handles) when done** — Close resources (streams, connections, handles) when done
-- 📐 **Debounce user input handlers (search, resize, scroll)** — Debounce user input handlers (search, resize, scroll)
-- 📐 **Use pagination for lists over 100 items** — Use pagination for lists over 100 items
-- 📐 **Implement retry logic for transient failures with exponential backoff** — Implement retry logic for transient failures with exponential backoff
-- 📐 **Return proper HTTP status codes — not 500 for everything** — Return proper HTTP status codes — not 500 for everything
-- 📐 **Always wrap async/await in try/catch** — Always wrap async/await in try/catch
-- 📐 **Hash passwords with cost factor ≥12 (bcrypt) or memory ≥64MB (argon2)** — Hash passwords with cost factor ≥12 (bcrypt) or memory ≥64MB (argon2)
-- 📐 **Implement rate limiting on login endpoints to prevent brute force** — Implement rate limiting on login endpoints to prevent brute force
-- 📐 **Use constants for magic numbers and strings** — Use constants for magic numbers and strings
-- 📐 **Handle edge cases: empty arrays, empty strings, null, undefined, 0, NaN** — Handle edge cases: empty arrays, empty strings, null, undefined, 0, NaN
-- 📐 **Keep functions under 50 lines and single-responsibility** — Keep functions under 50 lines and single-responsibility
-- 📐 **Remove unused imports, variables, and dead code** — Remove unused imports, variables, and dead code
-- 📐 **Always pull before push to avoid conflicts** — Always pull before push to avoid conflicts
-- 📐 **Use meaningful commit messages in imperative mood: "Add feature" not "Added feature"** — Use meaningful commit messages in imperative mood: "Add feature" not "Added feature"
-- 📐 **Don't commit node_modules, __pycache__, build/, dist/ — add to .gitignore** — Don't commit node_modules, __pycache__, build/, dist/ — add to .gitignore
-
-## 🤔 Decisions & Trade-offs
-
-- **Optimized Ethereal** — - # Walkthrough - Modernizing and Stabilizing our_love_story
-+ # Ethereal Romance Redesign Walkthro
-- **Optimized Ethereal** — - # Walkthrough - Modernizing and Stabilizing our_love_s
+- 📐 **what-changed in build.gradle.kts — confirmed 9x** — -     na
 
 ... [Truncated — see individual observations for full content]

@@ -1,0 +1,573 @@
+{
+    "@@locale": "en",
+    "appName": "Our Love Story",
+    "@appName": {
+        "description": "The name of the application"
+    },
+    "coupleName": "Mohamed ❤️ Sara",
+    "@coupleName": {
+        "description": "The names of the couple"
+    },
+    "daysTogether": "{days} Days Together",
+    "@daysTogether": {
+        "description": "Number of days the couple has been together",
+        "placeholders": {
+            "days": {
+                "type": "int"
+            }
+        }
+    },
+    "weddingCountdown": "Wedding Countdown",
+    "@weddingCountdown": {
+        "description": "Title for the wedding countdown section"
+    },
+    "memories": "Our Memories",
+    "@memories": {
+        "description": "Title for the memories section"
+    },
+    "settings": "Settings",
+    "@settings": {
+        "description": "Settings label"
+    },
+    "settingsTitle": "Settings",
+    "@settingsTitle": {
+        "description": "Title for the settings screen"
+    },
+    "language": "Language",
+    "@language": {
+        "description": "Language setting label"
+    },
+    "changeLanguage": "Change Language",
+    "@changeLanguage": {
+        "description": "Change language option"
+    },
+    "arabic": "Arabic",
+    "@arabic": {
+        "description": "Arabic language name"
+    },
+    "english": "English",
+    "@english": {
+        "description": "English language name"
+    },
+    "error": "Error",
+    "@error": {
+        "description": "General error message title"
+    },
+    "surprise": "Surprise",
+    "@surprise": {
+        "description": "Surprise section title"
+    },
+    "preparingMagic": "Preparing our magic...",
+    "@preparingMagic": {
+        "description": "Loading message for surprise section"
+    },
+    "loveStoryBegins": "Our Love Story Begins...",
+    "@loveStoryBegins": {
+        "description": "Intro text for the love story"
+    },
+    "secretMessage": "You have a secret message...",
+    "@secretMessage": {
+        "description": "Notification message for a secret message"
+    },
+    "tapToOpen": "Tap to Open",
+    "@tapToOpen": {
+        "description": "Instruction to open a message"
+    },
+    "saveInHeart": "Save in my Heart",
+    "@saveInHeart": {
+        "description": "Action to save a message"
+    },
+    "withLove": "With all my love, {name}",
+    "@withLove": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "journeyTogether": "JOURNEY TOGETHER",
+    "@journeyTogether": {
+        "description": "Heading for the journey together section"
+    },
+    "daysOfLove": "Days of Love",
+    "@daysOfLove": {
+        "description": "Label for days of love"
+    },
+    "timeline": "Timeline",
+    "@timeline": {
+        "description": "Timeline label"
+    },
+    "timelineSubtitle": "Our milestones",
+    "days": "Days",
+    "hours": "Hours",
+    "minutes": "Minutes",
+    "seconds": "Seconds",
+    "waitingForMoaz": "Waiting for Moaz",
+    "babyArrivalSubtitle": "Our first baby",
+    "babyArrivalTitle": "Baby Moaz",
+    "daysUntilArrival": "Days until Moaz arrives",
+    "timeUntilArrival": "Time until arrival",
+    "@timelineSubtitle": {
+        "description": "Subtitle for the timeline"
+    },
+    "memoriesSubtitle": "Captured hearts",
+    "@memoriesSubtitle": {
+        "description": "Subtitle for the memories section"
+    },
+    "surpriseSubtitle": "For you only",
+    "@surpriseSubtitle": {
+        "description": "Subtitle for the surprise section"
+    },
+    "countdown": "Wait...",
+    "@countdown": {
+        "description": "Loading/Wait message for countdown"
+    },
+    "countdownSubtitle": "Upcoming bliss",
+    "@countdownSubtitle": {
+        "description": "Subtitle for the countdown"
+    },
+    "footerMessage": "\"Every moment with you is a cinematic heirloom.\"",
+    "@footerMessage": {
+        "description": "Romantic quote in footer"
+    },
+    "ongoingLoveStory": "Our Ongoing Love Story",
+    "@ongoingLoveStory": {
+        "description": "Label for ongoing story"
+    },
+    "countingDaysTogether": "Counting the days to be together",
+    "@countingDaysTogether": {
+        "description": "Description for countdown"
+    },
+    "day": "Day",
+    "@day": {
+        "description": "Singular day"
+    },
+    "hour": "Hour",
+    "@hour": {
+        "description": "Singular hour"
+    },
+    "minute": "Minute",
+    "@minute": {
+        "description": "Singular minute"
+    },
+    "second": "Second",
+    "@second": {
+        "description": "Singular second"
+    },
+    "sinceJourneyStarted": "Since our real journey started",
+    "@sinceJourneyStarted": {
+        "description": "Description of start date"
+    },
+    "albumTitle": "Memories Album",
+    "@albumTitle": {
+        "description": "Title for the memories album"
+    },
+    "all": "All",
+    "@all": {
+        "description": "Filter label for all items"
+    },
+    "featured": "Featured",
+    "@featured": {
+        "description": "Filter label for featured items"
+    },
+    "photos": "Photos",
+    "@photos": {
+        "description": "Filter label for photos"
+    },
+    "videos": "Videos",
+    "@videos": {
+        "description": "Filter label for videos"
+    },
+    "treasureMoment": "Every moment is a treasure...",
+    "@treasureMoment": {
+        "description": "Motto for the album"
+    },
+    "noMemoriesYet": "No memories here yet",
+    "@noMemoriesYet": {
+        "description": "Empty state message for album"
+    },
+    "startDocumenting": "Start documenting your moments",
+    "@startDocumenting": {
+        "description": "Instruction for empty state"
+    },
+    "errorLoadingMemories": "Error loading memories",
+    "@errorLoadingMemories": {
+        "description": "Error message for album loading"
+    },
+    "addMemorySoon": "Adding a new memory — Soon!",
+    "@addMemorySoon": {
+        "description": "Placeholder for adding a memory"
+    },
+    "beautifulMemory": "A beautiful memory",
+    "@beautifulMemory": {
+        "description": "Subtitle for a memory item"
+    },
+    "confirmPin": "Confirm PIN",
+    "@confirmPin": {
+        "description": "Confirm PIN label"
+    },
+    "createPin": "Create PIN",
+    "@createPin": {
+        "description": "Create PIN label"
+    },
+    "pinMismatch": "PIN mismatch, try again",
+    "@pinMismatch": {
+        "description": "PIN mismatch error"
+    },
+    "reenterPin": "Re-enter PIN to confirm",
+    "@reenterPin": {
+        "description": "Instruction to re-enter PIN"
+    },
+    "enter4Digits": "Enter 4-digit PIN",
+    "@enter4Digits": {
+        "description": "Placeholder for PIN entry"
+    },
+    "enterPin": "Enter PIN",
+    "@enterPin": {
+        "description": "Label for PIN entry"
+    },
+    "incorrectPin": "Incorrect PIN ({attempts} attempts remaining)",
+    "@incorrectPin": {
+        "placeholders": {
+            "attempts": {
+                "type": "int"
+            }
+        }
+    },
+    "audioAndMusic": "🎵 Audio & Music",
+    "@audioAndMusic": {
+        "description": "Title for audio and music settings"
+    },
+    "playMusic": "Play Music",
+    "@playMusic": {
+        "description": "Label for play music toggle"
+    },
+    "romanticBackgroundMusic": "Romantic background music",
+    "@romanticBackgroundMusic": {
+        "description": "Description for background music"
+    },
+    "notifications": "🔔 Notifications",
+    "@notifications": {
+        "description": "Title for notification settings"
+    },
+    "memoriesNotifications": "Memories Notifications",
+    "@memoriesNotifications": {
+        "description": "Label for memory notifications"
+    },
+    "remindImportantEvents": "Remind of important events",
+    "@remindImportantEvents": {
+        "description": "Description for notifications"
+    },
+    "displayAndAnimations": "✨ Display & Animations",
+    "@displayAndAnimations": {
+        "description": "Title for display and animation settings"
+    },
+    "animationsAndMotion": "Animations & Motion",
+    "@animationsAndMotion": {
+        "description": "Label for animation settings"
+    },
+    "enableVisualEffects": "Enable visual effects",
+    "@enableVisualEffects": {
+        "description": "Description for visual effects"
+    },
+    "appearanceMode": "Appearance Mode",
+    "@appearanceMode": {
+        "description": "Label for appearance mode settings"
+    },
+    "dark": "Dark",
+    "@dark": {
+        "description": "Dark mode option"
+    },
+    "light": "Light",
+    "@light": {
+        "description": "Light mode option"
+    },
+    "securityAndPrivacy": "🔒 Security & Privacy",
+    "@securityAndPrivacy": {
+        "description": "Title for security settings"
+    },
+    "lockWithPin": "Lock app with PIN",
+    "@lockWithPin": {
+        "description": "Label for PIN lock toggle"
+    },
+    "enabledTapToEdit": "Enabled — Tap to edit",
+    "@enabledTapToEdit": {
+        "description": "Status for enabled PIN"
+    },
+    "disabled": "Disabled",
+    "@disabled": {
+        "description": "Status for disabled setting"
+    },
+    "dataManagement": "💾 Data Management",
+    "@dataManagement": {
+        "description": "Title for data management section"
+    },
+    "deleteAllData": "Delete All Data",
+    "@deleteAllData": {
+        "description": "Label for delete all data"
+    },
+    "resetAppCompletely": "Reset app completely",
+    "@resetAppCompletely": {
+        "description": "Description for reset app"
+    },
+    "appInfo": "ℹ️ App Information",
+    "@appInfo": {
+        "description": "Title for app information section"
+    },
+    "version": "Version",
+    "@version": {
+        "description": "App version label"
+    },
+    "aboutApp": "About App",
+    "@aboutApp": {
+        "description": "Information about the app"
+    },
+    "madeWithLoveFor": "Made with love for {name}",
+    "@madeWithLoveFor": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "confirmReset": "Confirm Reset",
+    "@confirmReset": {
+        "description": "Reset confirmation title"
+    },
+    "areYouSureDeleteAll": "Are you sure you want to delete all data?\nEvents and settings will be deleted.",
+    "@areYouSureDeleteAll": {
+        "description": "Warning message for deleting all data"
+    },
+    "cancel": "Cancel",
+    "@cancel": {
+        "description": "Cancel button label"
+    },
+    "delete": "Delete",
+    "@delete": {
+        "description": "Delete button label"
+    },
+    "dataCleared": "All data has been cleared",
+    "@dataCleared": {
+        "description": "Success message after clearing data"
+    },
+    "appDescription": "A dedicated app for documenting the love story of {name}.",
+    "@appDescription": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "builtWithFlutter": "Built with Flutter using Clean Architecture + Riverpod.",
+    "@builtWithFlutter": {
+        "description": "Technical description of the app"
+    },
+    "ourJourney": "Our Journey",
+    "@ourJourney": {
+        "description": "Title for the journey section"
+    },
+    "sortDate": "Sort by Date",
+    "@sortDate": {
+        "description": "Label for sorting by date"
+    },
+    "addMemory": "Add Memory",
+    "@addMemory": {
+        "description": "Button label to add a memory"
+    },
+    "beautifulMilestones": "Our Beautiful Milestones",
+    "@beautifulMilestones": {
+        "description": "Title for the milestones section"
+    },
+    "momentsInHeart": "{count} Moments engraved in the heart",
+    "@momentsInHeart": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "storyNotEnded": "And the story has not ended yet...",
+    "@storyNotEnded": {
+        "description": "Placeholder for ongoing journey"
+    },
+    "startWritingStory": "Start writing your love story",
+    "@startWritingStory": {
+        "description": "Encouragement for empty state"
+    },
+    "addFirstMemory": "Add First Memory",
+    "@addFirstMemory": {
+        "description": "Button label to add the first memory"
+    },
+    "confirmDeletion": "Confirm Deletion",
+    "@confirmDeletion": {
+        "description": "Title for delete confirmation"
+    },
+    "areYouSureDeleteEvent": "Are you sure you want to delete \"{title}\"?",
+    "@areYouSureDeleteEvent": {
+        "placeholders": {
+            "title": {
+                "type": "String"
+            }
+        }
+    },
+    "eventDeleted": "\"{title}\" has been deleted",
+    "@eventDeleted": {
+        "placeholders": {
+            "title": {
+                "type": "String"
+            }
+        }
+    },
+    "edit": "Edit",
+    "@edit": {
+        "description": "Edit button label"
+    },
+    "january": "January",
+    "@january": {
+        "description": "Month of January"
+    },
+    "february": "February",
+    "@february": {
+        "description": "Month of February"
+    },
+    "march": "March",
+    "@march": {
+        "description": "Month of March"
+    },
+    "april": "April",
+    "@april": {
+        "description": "Month of April"
+    },
+    "may": "May",
+    "@may": {
+        "description": "Month of May"
+    },
+    "june": "June",
+    "@june": {
+        "description": "Month of June"
+    },
+    "july": "July",
+    "@july": {
+        "description": "Month of July"
+    },
+    "august": "August",
+    "@august": {
+        "description": "Month of August"
+    },
+    "september": "September",
+    "@september": {
+        "description": "Month of September"
+    },
+    "october": "October",
+    "@october": {
+        "description": "Month of October"
+    },
+    "november": "November",
+    "@november": {
+        "description": "Month of November"
+    },
+    "december": "December",
+    "@december": {
+        "description": "Month of December"
+    },
+    "season": "{season} Season",
+    "@season": {
+        "placeholders": {
+            "season": {
+                "type": "String"
+            }
+        }
+    },
+    "daysAgo": "{count} days ago",
+    "@daysAgo": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "demo": "Demo",
+    "@demo": {
+        "description": "Label for demo events"
+    },
+    "winter": "Winter",
+    "@winter": {
+        "description": "Season: Winter"
+    },
+    "spring": "Spring",
+    "@spring": {
+        "description": "Season: Spring"
+    },
+    "summer": "Summer",
+    "@summer": {
+        "description": "Season: Summer"
+    },
+    "autumn": "Autumn",
+    "@autumn": {
+        "description": "Season: Autumn"
+    },
+    "editEvent": "Edit Event",
+    "@editEvent": {
+        "description": "Title for edit event screen"
+    },
+    "addNewMemory": "Add New Memory",
+    "@addNewMemory": {
+        "description": "Title for add event screen"
+    },
+    "eventTitle": "Event Title",
+    "@eventTitle": {
+        "description": "Field label for event title"
+    },
+    "exampleFirstMeet": "Example: First meeting",
+    "@exampleFirstMeet": {
+        "description": "Placeholder for event title"
+    },
+    "enterTitleError": "Please enter a title",
+    "@enterTitleError": {
+        "description": "Error message for empty title"
+    },
+    "description": "Description",
+    "@description": {
+        "description": "Field label for description"
+    },
+    "writeDetails": "Write details of this memory...",
+    "@writeDetails": {
+        "description": "Placeholder for description"
+    },
+    "enterDescError": "Please enter a description",
+    "@enterDescError": {
+        "description": "Error message for empty description"
+    },
+    "locationOptional": "Location (Optional)",
+    "@locationOptional": {
+        "description": "Field label for location"
+    },
+    "exampleFamilyHome": "Example: Family Home",
+    "@exampleFamilyHome": {
+        "description": "Placeholder for location"
+    },
+    "eventDate": "Event Date",
+    "@eventDate": {
+        "description": "Field label for event date"
+    },
+    "eventIcon": "Event Icon",
+    "@eventIcon": {
+        "description": "Field label for event icon"
+    },
+    "saveChanges": "Save Changes",
+    "@saveChanges": {
+        "description": "Button label to save changes"
+    },
+    "addEvent": "Add Event",
+    "@addEvent": {
+        "description": "Button label to add event"
+    },
+    "saveError": "Error saving: {error}",
+    "@saveError": {
+        "placeholders": {
+            "error": {
+                "type": "String"
+            }
+        }
+    }
+}

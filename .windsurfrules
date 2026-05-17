@@ -1,7 +1,7 @@
-# our_love_story — Project Memory
-# Auto-synced | 208 observations
+# our — Project Memory
+# Auto-synced | 813 observations
 
-**Stack:** Dart · Flutter
+**Stack:** Dart · Flutter + Provider + Riverpod · DB: Hive
 
 # 🏛️ CORE ARCHITECTURE
 

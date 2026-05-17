@@ -13,6 +13,12 @@
         "NEMOTRON_ENDPOINT": "https://api.ollama.com",
         "NEMOTRON_MODEL": "nemotron-3-super:cloud"
       }
+    },
+    "flutter-explorer-mcp": {
+      "command": "node",
+      "args": [
+        "c:/Users/m4oha/OneDrive/Desktop/new/out/mcp-server.js"
+      ]
     }
   }
 }

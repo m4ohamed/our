@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "flutter-explorer-mcp": {
+      "command": "node",
+      "args": [
+        "c:/Users/m4oha/OneDrive/Desktop/new/out/mcp-server.js"
+      ]
+    }
+  }
+}

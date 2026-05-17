@@ -1,30 +1,30 @@
 {
   "flutter": {
     "enabled": true,
-    "lastGenerated": "2026-04-03T10:00:38.884Z",
-    "observationCount": 65,
+    "lastGenerated": "2026-04-03T19:24:45.576Z",
+    "observationCount": 506,
     "skillCount": 0,
     "domain": "flutter",
     "triggerGlobs": [
       "**/*.dart"
     ],
-    "description": "Flutter for our_love_story. 2 gotchas, 6 conventions, 17 fixes."
+    "description": "Flutter for our. 9 gotchas, 71 conventions, 47 fixes."
   },
   "project": {
     "enabled": true,
-    "lastGenerated": "2026-04-03T10:00:38.882Z",
-    "observationCount": 98,
+    "lastGenerated": "2026-04-03T19:24:45.583Z",
+    "observationCount": 225,
     "skillCount": 0,
     "domain": "project",
     "triggerGlobs": [
       "**/*"
     ],
-    "description": "Project for our_love_story. 22 gotchas, 37 conventions, 7 fixes."
+    "description": "Project for our. 22 gotchas, 54 conventions, 18 fixes."
   },
   "config": {
     "enabled": true,
-    "lastGenerated": "2026-04-03T10:00:38.885Z",
-    "observationCount": 43,
+    "lastGenerated": "2026-04-03T19:24:45.595Z",
+    "observationCount": 78,
     "skillCount": 0,
     "domain": "config",
     "triggerGlobs": [
@@ -33,50 +33,83 @@
       "**/*.json",
       "**/*.toml"
     ],
-    "description": "Config for our_love_story. 7 conventions."
+    "description": "Config for our. 15 conventions."
   },
   "problem-fix": {
     "enabled": true,
-    "lastGenerated": "2026-04-03T10:00:38.886Z",
+    "lastGenerated": "2026-04-03T19:24:45.622Z",
     "observationCount": 0,
-    "skillCount": 1,
+    "skillCount": 2,
     "domain": "problem-fix",
     "triggerGlobs": [
       "**/*"
     ],
-    "description": "Problem Fix for our_love_story. ."
+    "description": "Problem Fix for our. 3 error→fix pairs."
   },
   "gotcha": {
     "enabled": true,
-    "lastGenerated": "2026-04-03T10:00:38.889Z",
+    "lastGenerated": "2026-04-03T19:24:45.632Z",
     "observationCount": 0,
     "skillCount": 1,
     "domain": "gotcha",
     "triggerGlobs": [
       "**/*"
     ],
-    "description": "Gotcha for our_love_story. ."
+    "description": "Gotcha for our. ."
   },
   "convention": {
     "enabled": true,
-    "lastGenerated": "2026-04-03T10:00:38.891Z",
+    "lastGenerated": "2026-04-03T19:24:45.624Z",
     "observationCount": 0,
-    "skillCount": 1,
+    "skillCount": 12,
     "domain": "convention",
     "triggerGlobs": [
       "**/*"
     ],
-    "description": "Convention for our_love_story. ."
+    "description": "Convention for our. ."
   },
   "decision": {
     "enabled": true,
-    "lastGenerated": "2026-04-03T10:00:38.892Z",
+    "lastGenerated": "2026-04-03T19:24:45.648Z",
     "observationCount": 0,
-    "skillCount": 1,
+    "skillCount": 2,
     "domain": "decision",
     "triggerGlobs": [
       "**/*"
     ],
-    "description": "Decision for our_love_story. ."
+    "description": "Decision for our. ."
+  },
+  "tool-pattern": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T19:24:45.630Z",
+    "observationCount": 0,
+    "skillCount": 6,
+    "domain": "tool-pattern",
+    "triggerGlobs": [
+      "**/*"
+    ],
+    "description": "Tool Pattern for our. ."
+  },
+  "swift": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T19:24:45.609Z",
+    "observationCount": 2,
+    "skillCount": 0,
+    "domain": "swift",
+    "triggerGlobs": [
+      "**/*.swift"
+    ],
+    "description": "Swift for our. ."
+  },
+  "java": {
+    "enabled": true,
+    "lastGenerated": "2026-04-03T19:24:45.614Z",
+    "observationCount": 2,
+    "skillCount": 0,
+    "domain": "java",
+    "triggerGlobs": [
+      "**/*.java"
+    ],
+    "description": "Java for our. ."
   }
 }

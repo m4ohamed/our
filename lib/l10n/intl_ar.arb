@@ -1,0 +1,573 @@
+{
+    "@@locale": "ar",
+    "appName": "قصة حبنا",
+    "@appName": {
+        "description": "The name of the application"
+    },
+    "coupleName": "محمد ❤️ سارة",
+    "@coupleName": {
+        "description": "The names of the couple"
+    },
+    "daysTogether": "{days} يوم معاً",
+    "@daysTogether": {
+        "description": "Number of days the couple has been together",
+        "placeholders": {
+            "days": {
+                "type": "int"
+            }
+        }
+    },
+    "weddingCountdown": "العد التنازلي للزفاف",
+    "@weddingCountdown": {
+        "description": "Title for the wedding countdown section"
+    },
+    "memories": "ذكرياتنا",
+    "@memories": {
+        "description": "Title for the memories section"
+    },
+    "settings": "الإعدادات",
+    "@settings": {
+        "description": "Settings label"
+    },
+    "settingsTitle": "الإعدادات",
+    "@settingsTitle": {
+        "description": "Title for the settings screen"
+    },
+    "language": "اللغة",
+    "@language": {
+        "description": "Language setting label"
+    },
+    "changeLanguage": "تغيير اللغة",
+    "@changeLanguage": {
+        "description": "Change language option"
+    },
+    "arabic": "العربية",
+    "@arabic": {
+        "description": "Arabic language name"
+    },
+    "english": "الإنجليزية",
+    "@english": {
+        "description": "English language name"
+    },
+    "error": "خطأ",
+    "@error": {
+        "description": "General error message title"
+    },
+    "surprise": "مفاجأة",
+    "@surprise": {
+        "description": "Surprise section title"
+    },
+    "preparingMagic": "نُحضّر سحرنا...",
+    "@preparingMagic": {
+        "description": "Loading message for surprise section"
+    },
+    "loveStoryBegins": "تبدأ قصة حبنا...",
+    "@loveStoryBegins": {
+        "description": "Intro text for the love story"
+    },
+    "secretMessage": "لديكِ رسالة سرية...",
+    "@secretMessage": {
+        "description": "Notification message for a secret message"
+    },
+    "tapToOpen": "اضغطي للفتح",
+    "@tapToOpen": {
+        "description": "Instruction to open a message"
+    },
+    "saveInHeart": "حفظ في قلبي",
+    "@saveInHeart": {
+        "description": "Action to save a message"
+    },
+    "withLove": "بكل الحب، {name}",
+    "@withLove": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "journeyTogether": "رحلتنا معاً",
+    "@journeyTogether": {
+        "description": "Heading for the journey together section"
+    },
+    "daysOfLove": "أيام الحب",
+    "@daysOfLove": {
+        "description": "Label for days of love"
+    },
+    "timeline": "الخط الزمني",
+    "@timeline": {
+        "description": "Timeline label"
+    },
+    "timelineSubtitle": "محطاتنا",
+    "days": "يوم",
+    "hours": "ساعة",
+    "minutes": "دقيقة",
+    "seconds": "ثانية",
+    "waitingForMoaz": "بانتظار معاذ",
+    "babyArrivalSubtitle": "أول طفل لنا",
+    "babyArrivalTitle": "الطفل معاذ",
+    "daysUntilArrival": "الأيام المتبقية لوصول معاذ",
+    "timeUntilArrival": "الوقت المتبقي للوصول",
+    "@timelineSubtitle": {
+        "description": "Subtitle for the timeline"
+    },
+    "memoriesSubtitle": "قلوب موثقة",
+    "@memoriesSubtitle": {
+        "description": "Subtitle for the memories section"
+    },
+    "surpriseSubtitle": "لكِ وحدكِ",
+    "@surpriseSubtitle": {
+        "description": "Subtitle for the surprise section"
+    },
+    "countdown": "انتظري...",
+    "@countdown": {
+        "description": "Loading/Wait message for countdown"
+    },
+    "countdownSubtitle": "السعادة القادمة",
+    "@countdownSubtitle": {
+        "description": "Subtitle for the countdown"
+    },
+    "footerMessage": "\"كل لحظة معكِ هي إرث سينمائي.\"",
+    "@footerMessage": {
+        "description": "Romantic quote in footer"
+    },
+    "ongoingLoveStory": "قصة حبنا المستمرة",
+    "@ongoingLoveStory": {
+        "description": "Label for ongoing story"
+    },
+    "countingDaysTogether": "نعد الأيام لنكون معاً",
+    "@countingDaysTogether": {
+        "description": "Description for countdown"
+    },
+    "day": "يوم",
+    "@day": {
+        "description": "Singular day"
+    },
+    "hour": "ساعة",
+    "@hour": {
+        "description": "Singular hour"
+    },
+    "minute": "دقيقة",
+    "@minute": {
+        "description": "Singular minute"
+    },
+    "second": "ثانية",
+    "@second": {
+        "description": "Singular second"
+    },
+    "sinceJourneyStarted": "منذ أن بدأت رحلتنا الحقيقية",
+    "@sinceJourneyStarted": {
+        "description": "Description of start date"
+    },
+    "albumTitle": "ألبوم الذكريات",
+    "@albumTitle": {
+        "description": "Title for the memories album"
+    },
+    "all": "الكل",
+    "@all": {
+        "description": "Filter label for all items"
+    },
+    "featured": "المميزة",
+    "@featured": {
+        "description": "Filter label for featured items"
+    },
+    "photos": "الصور",
+    "@photos": {
+        "description": "Filter label for photos"
+    },
+    "videos": "الفيديوهات",
+    "@videos": {
+        "description": "Filter label for videos"
+    },
+    "treasureMoment": "كل لحظة هي كنز...",
+    "@treasureMoment": {
+        "description": "Motto for the album"
+    },
+    "noMemoriesYet": "لا توجد ذكريات هنا بعد",
+    "@noMemoriesYet": {
+        "description": "Empty state message for album"
+    },
+    "startDocumenting": "ابدأ بتوثيق لحظاتكم",
+    "@startDocumenting": {
+        "description": "Instruction for empty state"
+    },
+    "errorLoadingMemories": "خطأ في تحميل الذكريات",
+    "@errorLoadingMemories": {
+        "description": "Error message for album loading"
+    },
+    "addMemorySoon": "إضافة ذكرى جديدة — قريباً!",
+    "@addMemorySoon": {
+        "description": "Placeholder for adding a memory"
+    },
+    "beautifulMemory": "ذكرى جميلة",
+    "@beautifulMemory": {
+        "description": "Subtitle for a memory item"
+    },
+    "confirmPin": "تأكيد الـ PIN",
+    "@confirmPin": {
+        "description": "Confirm PIN label"
+    },
+    "createPin": "إنشاء PIN",
+    "@createPin": {
+        "description": "Create PIN label"
+    },
+    "pinMismatch": "الـ PIN غير متطابق، حاول مجدداً",
+    "@pinMismatch": {
+        "description": "PIN mismatch error"
+    },
+    "reenterPin": "أعد إدخال الـ PIN للتأكيد",
+    "@reenterPin": {
+        "description": "Instruction to re-enter PIN"
+    },
+    "enter4Digits": "أدخل PIN من 4 أرقام",
+    "@enter4Digits": {
+        "description": "Placeholder for PIN entry"
+    },
+    "enterPin": "أدخل الـ PIN",
+    "@enterPin": {
+        "description": "Label for PIN entry"
+    },
+    "incorrectPin": "PIN غير صحيح ({attempts} محاولات متبقية)",
+    "@incorrectPin": {
+        "placeholders": {
+            "attempts": {
+                "type": "int"
+            }
+        }
+    },
+    "audioAndMusic": "🎵 الصوت والموسيقى",
+    "@audioAndMusic": {
+        "description": "Section header for audio settings"
+    },
+    "playMusic": "تشغيل الموسيقى",
+    "@playMusic": {
+        "description": "Label for play music toggle"
+    },
+    "romanticBackgroundMusic": "موسيقى رومانسية في الخلفية",
+    "@romanticBackgroundMusic": {
+        "description": "Description for background music"
+    },
+    "notifications": "🔔 الإشعارات",
+    "@notifications": {
+        "description": "Section header for notifications"
+    },
+    "memoriesNotifications": "إشعارات الذكريات",
+    "@memoriesNotifications": {
+        "description": "Label for memories notifications toggle"
+    },
+    "remindImportantEvents": "تذكير بالمناسبات المهمة",
+    "@remindImportantEvents": {
+        "description": "Description for notifications"
+    },
+    "displayAndAnimations": "✨ العرض والأنيميشن",
+    "@displayAndAnimations": {
+        "description": "Section header for display settings"
+    },
+    "animationsAndMotion": "الأنيميشن والحركة",
+    "@animationsAndMotion": {
+        "description": "Label for animations toggle"
+    },
+    "enableVisualEffects": "تفعيل التأثيرات البصرية",
+    "@enableVisualEffects": {
+        "description": "Description for animations"
+    },
+    "appearanceMode": "الوضع",
+    "@appearanceMode": {
+        "description": "Label for appearance mode setting"
+    },
+    "dark": "داكن",
+    "@dark": {
+        "description": "Dark mode option"
+    },
+    "light": "فاتح",
+    "@light": {
+        "description": "Light mode option"
+    },
+    "securityAndPrivacy": "🔒 الأمان والخصوصية",
+    "@securityAndPrivacy": {
+        "description": "Section header for security settings"
+    },
+    "lockWithPin": "قفل التطبيق بـ PIN",
+    "@lockWithPin": {
+        "description": "Label for PIN lock toggle"
+    },
+    "enabledTapToEdit": "مُفعَّل — اضغط للتعديل",
+    "@enabledTapToEdit": {
+        "description": "Status message when PIN is enabled"
+    },
+    "disabled": "غير مُفعَّل",
+    "@disabled": {
+        "description": "Status message when PIN is disabled"
+    },
+    "dataManagement": "💾 إدارة البيانات",
+    "@dataManagement": {
+        "description": "Section header for data management"
+    },
+    "deleteAllData": "مسح جميع البيانات",
+    "@deleteAllData": {
+        "description": "Label for deleting all data"
+    },
+    "resetAppCompletely": "إعادة ضبط التطبيق بالكامل",
+    "@resetAppCompletely": {
+        "description": "Description for data deletion"
+    },
+    "appInfo": "ℹ️ معلومات التطبيق",
+    "@appInfo": {
+        "description": "Section header for app info"
+    },
+    "version": "الإصدار",
+    "@version": {
+        "description": "Label for app version"
+    },
+    "aboutApp": "حول التطبيق",
+    "@aboutApp": {
+        "description": "Label for about app section"
+    },
+    "madeWithLoveFor": "صُنع بحب لـ {name}",
+    "@madeWithLoveFor": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "confirmReset": "تأكيد الإعادة",
+    "@confirmReset": {
+        "description": "Reset confirmation title"
+    },
+    "areYouSureDeleteAll": "هل أنت متأكد من مسح جميع البيانات؟\nسيتم حذف الأحداث والإعدادات.",
+    "@areYouSureDeleteAll": {
+        "description": "Warning message for deleting all data"
+    },
+    "cancel": "إلغاء",
+    "@cancel": {
+        "description": "Cancel button label"
+    },
+    "delete": "مسح",
+    "@delete": {
+        "description": "Delete button label"
+    },
+    "dataCleared": "تم مسح جميع البيانات",
+    "@dataCleared": {
+        "description": "Success message after clearing data"
+    },
+    "appDescription": "تطبيق مخصص لتوثيق قصة حب {name}.",
+    "@appDescription": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "builtWithFlutter": "صُنع بـ Flutter مع نظام Clean Architecture + Riverpod.",
+    "@builtWithFlutter": {
+        "description": "Technical description of the app"
+    },
+    "ourJourney": "رحلة حبنا",
+    "@ourJourney": {
+        "description": "Title for the journey section"
+    },
+    "sortDate": "ترتيب بالتاريخ",
+    "@sortDate": {
+        "description": "Label for sorting by date"
+    },
+    "addMemory": "إضافة ذكرى",
+    "@addMemory": {
+        "description": "Button label to add a memory"
+    },
+    "beautifulMilestones": "أجمل محطاتنا",
+    "@beautifulMilestones": {
+        "description": "Title for the milestones section"
+    },
+    "momentsInHeart": "{count} لحظة محفورة في القلب",
+    "@momentsInHeart": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "storyNotEnded": "والحكاية لم تنتهِ بعد...",
+    "@storyNotEnded": {
+        "description": "Placeholder for ongoing journey"
+    },
+    "startWritingStory": "ابدأ في كتابة قصة حبكم",
+    "@startWritingStory": {
+        "description": "Encouragement for empty state"
+    },
+    "addFirstMemory": "إضافة أول ذكرى",
+    "@addFirstMemory": {
+        "description": "Button label to add the first memory"
+    },
+    "confirmDeletion": "تأكيد الحذف",
+    "@confirmDeletion": {
+        "description": "Title for delete confirmation"
+    },
+    "areYouSureDeleteEvent": "هل أنت متأكد من حذف \"{title}\"؟",
+    "@areYouSureDeleteEvent": {
+        "placeholders": {
+            "title": {
+                "type": "String"
+            }
+        }
+    },
+    "eventDeleted": "تم حذف \"{title}\"",
+    "@eventDeleted": {
+        "placeholders": {
+            "title": {
+                "type": "String"
+            }
+        }
+    },
+    "edit": "تعديل",
+    "@edit": {
+        "description": "Edit button label"
+    },
+    "january": "يناير",
+    "@january": {
+        "description": "Month of January"
+    },
+    "february": "فبراير",
+    "@february": {
+        "description": "Month of February"
+    },
+    "march": "مارس",
+    "@march": {
+        "description": "Month of March"
+    },
+    "april": "إبريل",
+    "@april": {
+        "description": "Month of April"
+    },
+    "may": "مايو",
+    "@may": {
+        "description": "Month of May"
+    },
+    "june": "يونيو",
+    "@june": {
+        "description": "Month of June"
+    },
+    "july": "يوليو",
+    "@july": {
+        "description": "Month of July"
+    },
+    "august": "أغسطس",
+    "@august": {
+        "description": "Month of August"
+    },
+    "september": "سبتمبر",
+    "@september": {
+        "description": "Month of September"
+    },
+    "october": "أكتوبر",
+    "@october": {
+        "description": "Month of October"
+    },
+    "november": "نوفمبر",
+    "@november": {
+        "description": "Month of November"
+    },
+    "december": "ديسمبر",
+    "@december": {
+        "description": "Month of December"
+    },
+    "season": "فصل {season}",
+    "@season": {
+        "placeholders": {
+            "season": {
+                "type": "String"
+            }
+        }
+    },
+    "daysAgo": "منذ {count} يوم",
+    "@daysAgo": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "demo": "تجريبي",
+    "@demo": {
+        "description": "Label for demo events"
+    },
+    "winter": "الشتاء",
+    "@winter": {
+        "description": "Season: Winter"
+    },
+    "spring": "الربيع",
+    "@spring": {
+        "description": "Season: Spring"
+    },
+    "summer": "الصيف",
+    "@summer": {
+        "description": "Season: Summer"
+    },
+    "autumn": "الخريف",
+    "@autumn": {
+        "description": "Season: Autumn"
+    },
+    "editEvent": "تعديل الحدث",
+    "@editEvent": {
+        "description": "Title for edit event screen"
+    },
+    "addNewMemory": "إضافة ذكرى جديدة",
+    "@addNewMemory": {
+        "description": "Title for add event screen"
+    },
+    "eventTitle": "عنوان الحدث",
+    "@eventTitle": {
+        "description": "Field label for event title"
+    },
+    "exampleFirstMeet": "مثال: أول لقاء",
+    "@exampleFirstMeet": {
+        "description": "Placeholder for event title"
+    },
+    "enterTitleError": "يرجى إدخال العنوان",
+    "@enterTitleError": {
+        "description": "Error message for empty title"
+    },
+    "description": "الوصف",
+    "@description": {
+        "description": "Field label for description"
+    },
+    "writeDetails": "اكتب تفاصيل هذه الذكرى...",
+    "@writeDetails": {
+        "description": "Placeholder for description"
+    },
+    "enterDescError": "يرجى إدخال الوصف",
+    "@enterDescError": {
+        "description": "Error message for empty description"
+    },
+    "locationOptional": "المكان (اختياري)",
+    "@locationOptional": {
+        "description": "Field label for location"
+    },
+    "exampleFamilyHome": "مثال: منزل العائلة",
+    "@exampleFamilyHome": {
+        "description": "Placeholder for location"
+    },
+    "eventDate": "تاريخ الحدث",
+    "@eventDate": {
+        "description": "Field label for event date"
+    },
+    "eventIcon": "أيقونة الحدث",
+    "@eventIcon": {
+        "description": "Field label for event icon"
+    },
+    "saveChanges": "حفظ التعديلات",
+    "@saveChanges": {
+        "description": "Button label to save changes"
+    },
+    "addEvent": "إضافة الحدث",
+    "@addEvent": {
+        "description": "Button label to add event"
+    },
+    "saveError": "خطأ في الحفظ: {error}",
+    "@saveError": {
+        "placeholders": {
+            "error": {
+                "type": "String"
+            }
+        }
+    }
+}

@@ -1,6 +1,6 @@
 ---
 name: flutter
-description: "Flutter for our_love_story. 2 gotchas, 6 conventions, 17 fixes."
+description: "Flutter for our. 9 gotchas, 71 conventions, 47 fixes."
 domain: flutter
 triggers:
   - glob: "**/*.dart"
@@ -10,391 +10,337 @@ enabled: true
 
 # Flutter
 
-Auto-compiled from **65 real patterns** in **our_love_story**. This skill is auto-routed to agents when working on flutter files.
+Auto-compiled from **506 real patterns** in **our**. This skill is auto-routed to agents when working on flutter files.
 
 ## ⚠️ Anti-Patterns & Gotchas
 
 > **CRITICAL:** These are real gotchas from this project. Ignoring them WILL cause bugs.
 
-### ❌ gotcha in countdown_screen.dart
--       print('خطأ في تشغيل الموسيقى: $e');
-+       debugPrint('خطأ في تشغيل الموسيقى: $e');
--     return Container(
-+     return SizedBox(
-
-📌 IDE AST Context: Modified symbols likely include [CountdownScreen, _CountdownScreenState]
-- Modified 1 files
-
-### ❌ gotcha in surprise_screen.dart
--       print('خطأ في تشغيل الموسيقى: $e');
-+       debugPrint('خطأ في تشغيل الموسيقى: $e');
-
-📌 IDE AST Context: Modified symbols likely include [SurpriseScreen, _SurpriseScreenState, ParticlePainter]
-- Modified 1 files
-
+| ❌ Don't | Details |
+|----------|----------|
+| ⚠️ GOTCHA: Updated schema RefreshIndicator — lever | -           eventsAsync.when( +           RefreshIndicator( -             data: (events) => events.i |
+| ⚠️ GOTCHA: Updated schema CircularProgressIndicato | -           child: CircularProgressIndicator(color: AppColors.dustyRose), +           child: Circula |
+| ⚠️ GOTCHA: Updated schema CircularProgressIndicato | -               child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary), +    |
+| ⚠️ GOTCHA: Optimized Text | - import 'package:flutter_gen/gen_l10n/app_localizations.dart'; + import '../../generated/l10n.dart' |
+| ⚠️ GOTCHA: Optimized Center — prevents null/undefi | - import 'package:flutter_gen/gen_l10n/app_localizations.dart'; +  -  + import '../../core/constants |
+| ⚠️ GOTCHA: Updated schema Center — prevents null/u | -             error: (_, _) => +             error: (_, _) => Center(child: Text(l10n.errorLoadingMe |
+| gotcha in app_theme.dart | -   // Legacy aliases for backward compatibility +   // Semantic Colors -   static const Color prima |
+| gotcha in countdown_screen.dart | -       print('خطأ في تشغيل الموسيقى: $e'); +       debugPrint('خطأ في تشغيل الموسيقى: $e'); -     r |
+| gotcha in surprise_screen.dart | -       print('خطأ في تشغيل الموسيقى: $e'); +       debugPrint('خطأ في تشغيل الموسيقى: $e');  📌 IDE |
 
 ## 🔧 Problem Playbooks
 
-### Fixed null crash in SurpriseScreen — prevents null/undefined runtime crashes
-- import 'package:flutter/material.dart';
-+ import 'dart:math';
-- import 'package:flutter_animate/flutter_animate.dart';
-+ import 'dart:ui';
-- import 'package:audioplayers/audioplayers.dart';
-+ import 'package:flutter/material.dart';
-- import 'dart:math';
-+ import 'package:flutter_animate/flutter_animate.dart';
-- import '../theme/app_theme.dart';
-+ import 'package:audioplayers/audioplayers.dart';
-
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: SurpriseScreen
-3. identifier: StatefulWidget
-4. identifier: State
-5. identifier: TickerProviderStateMixin
-
-### Fixed null crash in CountdownScreen — prevents null/undefined runtime crashes
-- import 'package:flutter/material.dart';
-+ import 'dart:async';
-- import 'package:flutter_animate/flutter_animate.dart';
-+ import 'dart:ui';
-- import 'package:audioplayers/audioplayers.dart';
-+ import 'package:flutter/material.dart';
-- import 'package:confetti/confetti.dart';
-+ import 'package:flutter_animate/flutter_animate.dart';
-- import 'dart:async';
-+ import 'package:audioplayers/audioplayer
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: CountdownScreen
-3. identifier: StatefulWidget
-4. identifier: State
-5. identifier: TickerProviderStateMixin
-
-### Fixed null crash in AppColors — prevents null/undefined runtime crashes
--                 color: AppColors.darkText,
-+             color: AppColors.darkText,
--                 letterSpacing: 1.2,
-+             letterSpacing: 1.2,
--               ),
-+           ),
--             icon: const Icon(Icons.settings_outlined, color: AppColors.lightText),
-+             icon: const Icon(
--           ),
-+               Icons.settings_outlined,
--           const SizedBox(width: 8
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: AppColors
-3. identifier: Icon
-4. identifier: Icons
-5. identifier: SizedBox
-
-### Fixed null crash in HomeScreen — prevents null/undefined runtime crashes
-- import 'package:flutter/material.dart';
-+ import 'dart:ui';
-- import 'package:flutter_animate/flutter_animate.dart';
-+ import 'package:flutter/material.dart';
-- import 'timeline_screen.dart';
-+ import 'package:flutter_animate/flutter_animate.dart';
-- import 'countdown_screen.dart';
-+ import 'timeline_screen.dart';
-- import 'surprise_screen.dart';
-+ import 'countdown_screen.dart';
-- import 'memor
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: HomeScreen
-3. identifier: StatelessWidget
-4. identifier: Widget
-5. identifier: BuildContext
-
-### Fixed null crash in SplashScreen — prevents null/undefined runtime crashes
-- import '../theme/app_theme.dart';
-+ import 'dart:ui';
-- import 'home_screen.dart';
-+ import '../theme/app_theme.dart';
-- 
-+ import 'home_screen.dart';
-- class SplashScreen extends StatefulWidget {
-+ 
--   const SplashScreen({super.key});
-+ class SplashScreen extends StatefulWidget {
-- 
-+   const SplashScreen({super.key});
--   @override
-+ 
--   State<SplashScreen> createState() => _SplashScreenStat
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: SplashScreen
-3. identifier: StatefulWidget
-4. identifier: State
-5. identifier: TickerProviderStateMixin
-
-### Fixed null crash in SizedBox — prevents null/undefined runtime crashes
--             Container(
-+             SizedBox(
--       ScaffoldMessenger.of(
-+       if (!mounted) return;
--         context,
-+       ScaffoldMessenger.of(
--       ).showSnackBar(SnackBar(content: Text('تم اختيار الصورة بنجاح')));
-+         context,
--     }
-+       ).showSnackBar(SnackBar(content: Text('تم اختيار الصورة بنجاح')));
--   }
-+     }
-- 
-+   }
--   void _saveEvent() {
-+ 
--     if (_form
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: SizedBox
-3. identifier: ScaffoldMessenger
-4. identifier: SnackBar
-5. identifier: Text
-
-### Fixed null crash in MediaType — prevents null/undefined runtime crashes
--       mediaType: map['media_type'] == 'video' ? MediaType.video : MediaType.photo,
-+       mediaType: map['media_type'] == 'video'
--       uploadDate: DateTime.parse(map['upload_date']),
-+           ? MediaType.video
--       eventId: map['event_id'],
-+           : MediaType.photo,
--       description: map['description'],
-+       uploadDate: DateTime.parse(map['upload_date']),
--       isFeatured:
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: MediaType
-3. identifier: DateTime
-4. identifier: JSON
-5. identifier: Map
-
 ### Fixed null crash in Navigator — prevents null/undefined runtime crashes
--     Navigator.pushReplacement(
-+     if (!mounted) return;
--       context,
-+     Navigator.pushReplacement(
--       PageRouteBuilder(
-+       context,
--         pageBuilder: (context, animation, secondaryAnimation) =>
-+       PageRouteBuilder(
--             const HomeScreen(),
-+         pageBuilder: (context, animation, secondaryAnimation) =>
--         transitionsBuilder: (context, animation, s
+-     // Hash the PIN before storing
++     final hash = sha256.convert(utf8.encode(_pin)).toString();
+-     final hash = sha256.convert(utf8.encode(_pin)).toString();
++     final settings = ref.read(settingsProvider).value;
+-     final settings = ref.read(settingsProvider).valueOrNull;
++     if (settings != null) {
+-     if (settings != null) {
++       await ref
+-       await ref
++           .read
 
 **Actionable Steps:**
 1. Modified 1 files
 2. identifier: Navigator
-3. identifier: PageRouteBuilder
-4. identifier: HomeScreen
-5. identifier: FadeTransition
-
-### Fixed null crash in AppColors — prevents null/undefined runtime crashes
--                                   color: AppColors.lightPink.withValues(alpha: 0.2),
-+                                   color: AppColors.lightPink.withValues(
--                                   child: Center(
-+                                     alpha: 0.2,
--                                     child: CircularProgressIndicator(
-+                                   ),
--                         
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: AppColors
-3. identifier: Center
-4. identifier: CircularProgressIndicator
-5. identifier: Container
-
-### Fixed null crash in SurpriseScreen — prevents null/undefined runtime crashes
--   @override
-+   const SurpriseScreen({super.key});
--   _SurpriseScreenState createState() => _SurpriseScreenState();
-+ 
-- }
-+   @override
-- 
-+   State<SurpriseScreen> createState() => _SurpriseScreenState();
-- class _SurpriseScreenState extends State<SurpriseScreen>
-+ }
--     with TickerProviderStateMixin {
-+ 
--   late AnimationController _envelopeController;
-+ class _SurpriseScreenState extends
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: SurpriseScreen
-3. identifier: State
-4. identifier: TickerProviderStateMixin
-5. identifier: AnimationController
-
-### Fixed null crash in TimelineScreen — prevents null/undefined runtime crashes
--   @override
-+   const TimelineScreen({super.key});
--   _TimelineScreenState createState() => _TimelineScreenState();
-+ 
-- }
-+   @override
-- 
-+   State<TimelineScreen> createState() => _TimelineScreenState();
-- class _TimelineScreenState extends State<TimelineScreen>
-+ }
--     with TickerProviderStateMixin {
-+ 
--   late ScrollController _scrollController;
-+ class _TimelineScreenState extends Stat
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: TimelineScreen
-3. identifier: State
-4. identifier: TickerProviderStateMixin
-5. identifier: ScrollController
-
-### Fixed null crash in SplashScreen — prevents null/undefined runtime crashes
-- 
-+ class SplashScreen extends StatefulWidget {
-- class SplashScreen extends StatefulWidget {
-+   const SplashScreen({super.key});
--   @override
-+ 
--   _SplashScreenState createState() => _SplashScreenState();
-+   @override
-- }
-+   State<SplashScreen> createState() => _SplashScreenState();
-- 
-+ }
-- class _SplashScreenState extends State<SplashScreen>
-+ 
--     with TickerProviderStateMixin {
-+ cla
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: SplashScreen
-3. identifier: StatefulWidget
-4. identifier: State
-5. identifier: TickerProviderStateMixin
-
-### Fixed null crash in MediaType — prevents null/undefined runtime crashes
--         _filteredMediaFiles = _allMediaFiles.where((media) => media.isFeatured).toList();
-+         _filteredMediaFiles = _allMediaFiles
--       } else if (filter == 'الفيديوهات') {
-+             .where((media) => media.isFeatured)
--         _filteredMediaFiles = _allMediaFiles.where((media) => media.mediaType == MediaType.video).toList();
-+             .toList();
--       } else if (filter == 'ا
-
-**Actionable Steps:**
-1. Modified 1 files
-2. identifier: MediaType
 3. identifier: Widget
 4. identifier: BuildContext
 5. identifier: Scaffold
 
-### Fixed null crash in MemoriesAlbumScreen — prevents null/undefined runtime cra...
--   @override
-+   const MemoriesAlbumScreen({super.key});
--   _MemoriesAlbumScreenState createState() => _MemoriesAlbumScreenState();
+### Fixed null crash in Success — prevents null/undefined runtime crashes
+-       // إذا كان الـ box فارغ، نبذر البيانات التجريبية
++       // التحقق دائماً من وجود كافة البيانات التجريبية (لبذور جديدة)
+-       if (_box.isEmpty) {
++       await _seedDemoEvents();
+-         await _seedDemoEvents();
 + 
-- }
-+   @override
+-       }
++       final events = _box.values.map((m) => m.toEntity()).toList()
 - 
-+   State<MemoriesAlbumScreen> createState() => _MemoriesAlbumScreenState();
-- class _MemoriesAlbumScreenState extends State<MemoriesAlbumScreen>
-+ }
--     with TickerProviderStateMixin {
-+ 
--   List<MediaFile> _allMediaFiles = [];
-+ class _M
++         ..sort((a, b) => a.date.compareTo(b.date));
+-       final events = _box.values.ma
 
 **Actionable Steps:**
 1. Modified 1 files
-2. identifier: MemoriesAlbumScreen
-3. identifier: State
-4. identifier: TickerProviderStateMixin
-5. identifier: List
+2. identifier: Success
+3. identifier: Failure
+4. identifier: StorageException
+5. identifier: Future
 
-### Fixed null crash in CountdownScreen — prevents null/undefined runtime crashes
--   @override
-+   const CountdownScreen({super.key});
--   _CountdownScreenState createState() => _CountdownScreenState();
+### Fixed null crash in PinSetupScreen — prevents null/undefined runtime crashes
+- import '../../theme/app_theme.dart';
++ import '../providers/app_providers.dart';
+- import '../providers/app_providers.dart';
 + 
-- }
-+   @override
 - 
-+   State<CountdownScreen> createState() => _CountdownScreenState();
-- class _CountdownScreenState extends State<CountdownScreen>
-+ }
--     with TickerProviderStateMixin {
++ class PinSetupScreen extends ConsumerStatefulWidget {
+- class PinSetupScreen extends ConsumerStatefulWidget {
++   const PinSetupScreen({super.key});
+-   const PinSetupScreen({super.key});
 + 
--   late Timer _timer;
-+ class _CountdownScreenState extends State<CountdownScr
+- 
++   @override
+-   @override
++   ConsumerState<PinSetupScreen> createSta
 
 **Actionable Steps:**
 1. Modified 1 files
-2. identifier: CountdownScreen
-3. identifier: State
-4. identifier: TickerProviderStateMixin
+2. identifier: PinSetupScreen
+3. identifier: ConsumerStatefulWidget
+4. identifier: ConsumerState
+5. identifier: String
+
+### problem-fix in pin_setup_screen.dart
+-       backgroundColor: AppColors.pearlWhite,
++       backgroundColor: Theme.of(context).colorScheme.surface,
+-             const Icon(
++             Icon(
+-               color: AppColors.dustyRose,
++               color: Theme.of(context).colorScheme.primary,
+-                 color: AppColors.darkText,
++                 color: Theme.of(context).colorScheme.onSurface,
+-                   color:
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### Fixed null crash in SplashScreen — prevents null/undefined runtime crashes
+- import '../../theme/app_theme.dart';
++ import '../providers/audio_provider.dart';
+- import '../providers/audio_provider.dart';
++ import '../providers/app_providers.dart';
+- import '../providers/app_providers.dart';
++ import 'home_screen.dart';
+- import 'home_screen.dart';
++ 
+- 
++ class SplashScreen extends ConsumerStatefulWidget {
+- class SplashScreen extends ConsumerStatefulWidget {
++   const S
+
+**Actionable Steps:**
+1. Modified 1 files
+2. identifier: SplashScreen
+3. identifier: ConsumerStatefulWidget
+4. identifier: ConsumerState
 5. identifier: Timer
 
-### Fixed null crash in AddEditEventScreen — prevents null/undefined runtime crashes
--   const AddEditEventScreen({
-+   const AddEditEventScreen({super.key, this.event, required this.onSave});
--     Key? key,
+### Fixed null crash in SplashScreen — prevents null/undefined runtime crashes
+- import '../../core/constants/app_constants.dart';
++ import '../../theme/app_theme.dart';
+- import '../../theme/app_theme.dart';
++ import '../providers/audio_provider.dart';
+- import '../providers/audio_provider.dart';
++ import '../providers/app_providers.dart';
+- import '../providers/app_providers.dart';
++ import 'home_screen.dart';
+- import 'home_screen.dart';
 + 
--     this.event,
-+   @override
--     required this.onSave,
-+   State<AddEditEventScreen> createState() => _AddEditEventScreenState();
--   }) : super(key: key);
-+ }
--   @override
-+ class _AddEditEventScreenState extends State<AddEditEventScreen> {
--   _AddEditEventScreenSt
+- 
++ class SplashScreen extends
 
 **Actionable Steps:**
 1. Modified 1 files
-2. identifier: AddEditEventScreen
-3. identifier: State
-4. identifier: GlobalKey
-5. identifier: FormState
+2. identifier: SplashScreen
+3. identifier: ConsumerStatefulWidget
+4. identifier: ConsumerState
+5. identifier: Timer
 
-### Fixed null crash in BoxConstraints — prevents null/undefined runtime crashes
--     super.key, 
-+     super.key,
--         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-+         constraints: BoxConstraints(
--         decoration: BoxDecoration(
-+           maxHeight: MediaQuery.of(context).size.height * 0.85,
--           borderRadius: BorderRadius.circular(20),
-+         ),
--           gradient: LinearGradient(
-+         decoration: BoxD
+### Fixed null crash in SplashScreen — prevents null/undefined runtime crashes
+- 
++ import '../../generated/l10n.dart';
+- import 'package:flutter_gen/gen_l10n/app_localizations.dart';
++ 
+- 
++ import '../../core/constants/app_constants.dart';
+- import '../../core/constants/app_constants.dart';
++ import '../../theme/app_theme.dart';
+- import '../../theme/app_theme.dart';
++ import '../providers/audio_provider.dart';
+- import '../providers/audio_provider.dart';
++ import '../prov
 
 **Actionable Steps:**
 1. Modified 1 files
-2. identifier: BoxConstraints
-3. identifier: MediaQuery
-4. identifier: BoxDecoration
-5. identifier: BorderRadius
+2. identifier: SplashScreen
+3. identifier: ConsumerStatefulWidget
+4. identifier: ConsumerState
+5. identifier: Timer
 
-## 📐 Conventions & Best Practices
+### Fixed null crash in PinSetupScreen — prevents null/undefined runtime crashes
+- 
++ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+- import '../../theme/app_theme.dart';
++ 
+- import '../providers/app_providers.dart';
++ import '../../theme/app_theme.dart';
+- 
++ import '../providers/app_providers.dart';
+- class PinSetupScreen extends ConsumerStatefulWidget {
++ 
+-   const PinSetupScreen({super.key});
++ class PinSetupScreen extends ConsumerStatefulWidget {
+- 
++   
 
-### Project Conventions
-- 📐 **what-cha
+**Actionable Steps:**
+1. Modified 1 files
+2. identifier: PinSetupScreen
+3. identifier: ConsumerStatefulWidget
+4. identifier: ConsumerState
+5. identifier: String
+
+### Fixed null crash in HomeScreen — prevents null/undefined runtime crashes
+- 
++ import 'package:google_fonts/google_fonts.dart';
+- import '../../core/constants/app_constants.dart';
++ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+- import '../../theme/app_theme.dart';
++ 
+- import '../providers/app_providers.dart';
++ import '../../core/constants/app_constants.dart';
+- import 'timeline_screen.dart';
++ import '../../theme/app_theme.dart';
+- import 'countdown_
+
+**Actionable Steps:**
+1. Modified 1 files
+2. identifier: HomeScreen
+3. identifier: ConsumerWidget
+4. identifier: Widget
+5. identifier: BuildContext
+
+### Fixed null crash in SplashScreen — prevents null/undefined runtime crashes
+- import '../../core/constants/app_constants.dart';
++ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+- import '../../theme/app_theme.dart';
++ 
+- import '../providers/audio_provider.dart';
++ import '../../core/constants/app_constants.dart';
+- import '../providers/app_providers.dart';
++ import '../../theme/app_theme.dart';
+- import 'home_screen.dart';
++ import '../providers/audio_prov
+
+**Actionable Steps:**
+1. Modified 1 files
+2. identifier: SplashScreen
+3. identifier: ConsumerStatefulWidget
+4. identifier: ConsumerState
+5. identifier: Timer
+
+### Fixed null crash in Infrastructure — prevents null/undefined runtime crashes
+- import 'package:flutter_riverpod/flutter_riverpod.dart';
++ import 'package:flutter/material.dart';
+- import 'package:hive_flutter/hive_flutter.dart';
++ import 'package:flutter_riverpod/flutter_riverpod.dart';
+- import 'package:shared_preferences/shared_preferences.dart';
++ import 'package:hive_flutter/hive_flutter.dart';
+- 
++ import 'package:shared_preferences/shared_preferences.dart';
+- import 
+
+**Actionable Steps:**
+1. Modified 1 files
+2. identifier: Infrastructure
+3. identifier: Providers
+4. identifier: Provider
+5. identifier: SharedPreferences
+
+### Fixed null crash in Future — prevents null/undefined runtime crashes
+-   Future<void> reset() async {
++   Future<void> setLanguage(String language) async {
+-     state = const AsyncLoading();
++     final current = state.valueOrNull;
+-     final repo = ref.read(settingsRepositoryProvider);
++     if (current == null) return;
+-     await repo.resetSettings();
++     await saveSettings(current.copyWith(language: language));
+-     state = const AsyncData(AppSettingsEntit
+
+**Actionable Steps:**
+1. Modified 1 files
+2. identifier: Future
+3. identifier: String
+4. identifier: AsyncLoading
+5. identifier: AsyncData
+
+### problem-fix in memories_album_screen.dart
+-                       placeholder: (_, __) => Container(
++                       placeholder: (_, _) => Container(
+-                       errorWidget: (_, __, ___) => Container(
++                       errorWidget: (_, _, _) => Container(
+
+📌 IDE AST Context: Modified symbols likely include [MemoriesAlbumScreen, _MemoriesAlbumScreenState, _MediaCard, FullScreenGallery, _FullScreenGalleryState]
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### Fixed null crash in Spacer — prevents null/undefined runtime crashes
+-                         error: (_, _) => const SizedBox(),
++                         const Spacer(),
+-             ),
++                         Text(
+-             Text(
++                           data.title,
+-                           data.title,
++                           style: Theme.of(context).textTheme.headlineMedium
+-                           style: Theme.of(context).textTheme.headlin
+
+**Actionable Steps:**
+1. Modified 1 files
+2. identifier: Spacer
+3. identifier: Text
+4. identifier: Theme
+5. identifier: FontWeight
+
+### Fixed null crash in SizedBox — prevents null/undefined runtime crashes
+-                         const Spacer(),
++                         error: (_, _) => const SizedBox(),
+-                         Text(
++             ),
+-                           data.title,
++             Text(
+-                           style: Theme.of(context).textTheme.headlineMedium
++                           data.title,
+-                               ?.copyWith(
++                         
+
+**Actionable Steps:**
+1. Modified 1 files
+2. identifier: SizedBox
+3. identifier: Text
+4. identifier: Theme
+5. identifier: FontWeight
+
+### problem-fix in event_detail_sheet.dart
+-             placeholder: (_, __) => Container(
++             placeholder: (_, _) => Container(
+-             errorWidget: (_, __, ___) => Container(
++             errorWidget: (_, _, _) => Container(
+
+📌 IDE AST Context: Modified symbols likely include [EventDetailSheet]
+
+**Actionable Steps:**
+1. Modified 1 files
+
+### Fixed null crash in HomeScreen — prevents null/undefined runtime crashes
+- import '../../core/constants/app_constants.dart';
++ import '../../theme/app_theme.dart';
+- import '../../theme/app_theme.dart';
++ import '../providers/app_providers.dart';
+- import '../providers/app_providers.dart';
++ import 'timeline_screen.dart';
+- import 'timeline_screen.dart';
++ import 'countdown_screen.dart';
+- import 'countdown_screen.dart';
++ import 'surprise_screen.dart';
+- import 'surpr
+
+**Actionable Steps:**
+1. Modified 1 files
+2. identifier: HomeScre
 
 ... [Truncated — see individual observations for full content]
