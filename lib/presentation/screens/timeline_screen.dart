@@ -67,7 +67,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   AppBar _buildAppBar(BuildContext context, S s, bool isAscending) {
     return AppBar(
       title: Text(s.ourJourney),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new, size: 20),
@@ -261,12 +261,12 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
       onPressed: () => _showAddForm(s),
       backgroundColor: Theme.of(context).colorScheme.primary,
       elevation: 4,
-      icon: const Icon(Icons.favorite, color: Colors.white, size: 18),
+      icon: Icon(Icons.favorite, color: Theme.of(context).colorScheme.onPrimary, size: 18),
       label: Text(
         s.addMemory,
         style: GoogleFonts.manrope(
           fontWeight: FontWeight.bold,
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.onPrimary,
         ),
       ),
     ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack).fadeIn();
@@ -284,7 +284,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
       builder: (_) => EventFormSheet(
         onSave: (event) async {
           final newEvent = event.copyWith(id: const Uuid().v4());
@@ -298,7 +298,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
       builder: (_) => EventFormSheet(
         event: event,
         onSave: (updated) async {
@@ -312,7 +312,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
       builder: (_) => EventDetailSheet(
         event: event,
         onEdit: () {
@@ -359,7 +359,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                 );
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             child: Text(s.delete),
           ),
         ],
@@ -592,7 +592,7 @@ class _TimelineTile extends StatelessWidget {
           'delete',
           Icons.delete_outline_rounded,
           s.delete,
-          Colors.redAccent,
+          Theme.of(context).colorScheme.error,
         ),
       ],
     );

@@ -177,6 +177,14 @@ class SettingsNotifier extends AsyncNotifier<AppSettingsEntity> {
     );
   }
 
+  Future<void> toggleDemoData() async {
+    final current = state.value;
+    if (current == null) return;
+    await saveSettings(
+      current.copyWith(enableDemoData: !current.enableDemoData),
+    );
+  }
+
   Future<void> setThemeMode(AppThemeMode mode) async {
     final current = state.value;
     if (current == null) return;
@@ -217,6 +225,10 @@ final isNotificationsEnabledProvider = Provider<bool>((ref) {
 
 final isAnimationsEnabledProvider = Provider<bool>((ref) {
   return ref.watch(settingsProvider).value?.animationsEnabled ?? true;
+});
+
+final isDemoDataEnabledProvider = Provider<bool>((ref) {
+  return ref.watch(settingsProvider).value?.enableDemoData ?? true;
 });
 
 final themeModeProvider = Provider<AppThemeMode>((ref) {

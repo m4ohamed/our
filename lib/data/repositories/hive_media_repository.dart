@@ -62,6 +62,7 @@ class HiveMediaRepository implements MediaRepository {
   Future<Result<void>> deleteMedia(String id) async {
     try {
       await _box.delete(id);
+      await _prefs.setBool(AppConstants.keyDemoMediaSeeded, true);
       return const Success(null);
     } catch (e) {
       return Failure(StorageException('فشل حذف الصورة: $e'));
@@ -73,6 +74,7 @@ class HiveMediaRepository implements MediaRepository {
     try {
       await _box.clear();
       await _prefs.setBool(AppConstants.keyDemoMediaSeeded, true);
+      await _prefs.setBool(AppConstants.keyEnableDemoData, false);
       return const Success(null);
     } catch (e) {
       return Failure(StorageException('فشل مسح ألبوم الذكريات: $e'));
@@ -98,9 +100,11 @@ class HiveMediaRepository implements MediaRepository {
   Stream<List<MediaFileEntity>> watchMedia() => _streamController.stream;
 
   Future<void> _seedIfNeeded() async {
+    final enableDemoData =
+        _prefs.getBool(AppConstants.keyEnableDemoData) ?? true;
     final alreadySeeded =
         _prefs.getBool(AppConstants.keyDemoMediaSeeded) ?? false;
-    if (alreadySeeded) return;
+    if (!enableDemoData || alreadySeeded) return;
 
     if (_box.isEmpty) {
       for (final item in DemoMediaSeed.items) {

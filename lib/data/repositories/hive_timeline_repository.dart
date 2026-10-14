@@ -18,7 +18,6 @@ class HiveTimelineRepository implements TimelineRepository {
       StreamController<List<TimelineEventEntity>>.broadcast();
 
   HiveTimelineRepository(this._box, this._prefs) {
-    // مراقبة أي تغيير في الـ box وبث التحديث
     _box.watch().listen((_) => _emit());
   }
 
@@ -31,7 +30,7 @@ class HiveTimelineRepository implements TimelineRepository {
   @override
   Future<Result<List<TimelineEventEntity>>> getAllEvents() async {
     try {
-      await _seedDemoEventsIfNeeded();
+      await _seedDemoEvents();
 
       final events = _box.values.map((m) => m.toEntity()).toList()
         ..sort((a, b) => a.date.compareTo(b.date));
@@ -74,6 +73,11 @@ class HiveTimelineRepository implements TimelineRepository {
   @override
   Future<Result<void>> deleteEvent(String id) async {
     try {
+      final existing = _box.get(id);
+      if (existing != null && existing.isDemo) {
+        // منع إعادة زرع البيانات التجريبية بعد قيام المستخدم بحذف حدث تجريبي
+        await _prefs.setBool(AppConstants.keyDemoEventsSeeded, true);
+      }
       await _box.delete(id);
       return const Success(null);
     } catch (e) {
@@ -86,6 +90,7 @@ class HiveTimelineRepository implements TimelineRepository {
     try {
       await _box.clear();
       await _prefs.setBool(AppConstants.keyDemoEventsSeeded, true);
+      await _prefs.setBool(AppConstants.keyEnableDemoData, false);
       return const Success(null);
     } catch (e) {
       return Failure(StorageException('فشل مسح الأحداث: $e'));
@@ -95,10 +100,12 @@ class HiveTimelineRepository implements TimelineRepository {
   @override
   Stream<List<TimelineEventEntity>> watchEvents() => _streamController.stream;
 
-  Future<void> _seedDemoEventsIfNeeded() async {
+  Future<void> _seedDemoEvents() async {
+    final enableDemoData =
+        _prefs.getBool(AppConstants.keyEnableDemoData) ?? true;
     final alreadySeeded =
         _prefs.getBool(AppConstants.keyDemoEventsSeeded) ?? false;
-    if (alreadySeeded) return;
+    if (!enableDemoData || alreadySeeded) return;
 
     if (_box.isEmpty) {
       final now = DateTime.now();

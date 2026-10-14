@@ -1001,7 +1001,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                       dimension: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: AppTheme.white,
                       ),
                     )
                   : const Icon(Icons.movie_creation_outlined, size: 18),
@@ -1065,13 +1065,13 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     if (_project.clips.isEmpty) {
       return Container(
         decoration: BoxDecoration(
-          color: Colors.black87,
+          color: AppTheme.black.withValues(alpha: 0.87),
           borderRadius: BorderRadius.circular(20),
         ),
         child: const Center(
           child: Text(
             'أضف صوراً أو مقاطع فيديو للبدء',
-            style: TextStyle(color: Colors.white70),
+            style: TextStyle(color: AppTheme.white.withValues(alpha: 0.7)),
           ),
         ),
       );
@@ -1120,7 +1120,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        color: const Color(0xFF14080A),
+        color: AppTheme.studioCanvasBg,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -1162,8 +1162,8 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                       center: Alignment.center,
                       radius: 0.9,
                       colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: vignetteAmount),
+                        AppTheme.transparentColor,
+                        AppTheme.black.withValues(alpha: vignetteAmount),
                       ],
                       stops: const [0.45, 1.0],
                     ),
@@ -1187,13 +1187,13 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black54,
+                    color: AppTheme.black.withValues(alpha: 0.54),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${_playheadTime.toStringAsFixed(1)}s / ${_project.totalDuration.toStringAsFixed(1)}s • اسحب للتحريك ◆',
                     style: GoogleFonts.manrope(
-                      color: Colors.white,
+                      color: AppTheme.white,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1275,8 +1275,8 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
             end: Alignment.bottomRight,
             colors: [
               Color(clip.cardColorValue),
-              const Color(0xFF7D5C7E),
-              const Color(0xFF2A1215),
+              AppTheme.studioClipBg1,
+              AppTheme.studioClipBg2,
             ],
           ),
         ),
@@ -1288,7 +1288,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
               children: [
                 const Icon(
                   Icons.favorite_rounded,
-                  color: Colors.white,
+                  color: AppTheme.white,
                   size: 54,
                 ),
                 const SizedBox(height: 16),
@@ -1296,7 +1296,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                   clip.title,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.notoSerif(
-                    color: Colors.white,
+                    color: AppTheme.white,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1314,7 +1314,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         fit: BoxFit.cover,
         placeholder: (_, _) => const Center(child: CircularProgressIndicator()),
         errorWidget: (_, _, _) => const Center(
-          child: Icon(Icons.broken_image_outlined, color: Colors.white54),
+          child: Icon(Icons.broken_image_outlined, color: AppTheme.white.withValues(alpha: 0.54)),
         ),
       );
     }
@@ -1371,10 +1371,10 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.45),
+                  color: AppTheme.black.withValues(alpha: 0.45),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.25),
+                    color: AppTheme.white.withValues(alpha: 0.25),
                   ),
                 ),
                 child: Text(
@@ -1581,7 +1581,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: isSelected
-                                  ? Colors.white
+                                  ? AppTheme.white
                                   : theme.colorScheme.primary,
                             ),
                           ),
@@ -1623,7 +1623,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                 decoration: BoxDecoration(
                   color: selected
                       ? theme.colorScheme.primary
-                      : Colors.transparent,
+                      : AppTheme.transparentColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
@@ -1635,7 +1635,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     color: selected
-                        ? Colors.white
+                        ? AppTheme.white
                         : theme.colorScheme.onSurface,
                   ),
                 ),
@@ -1705,7 +1705,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                 backgroundColor: theme.colorScheme.primary,
                 child: Text(
                   '${i + 1}',
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: AppTheme.white),
                 ),
               ),
               title: Text(
@@ -1746,7 +1746,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                     IconButton(
                       icon: const Icon(
                         Icons.delete_outline_rounded,
-                        color: Colors.redAccent,
+                        color: AppTheme.dangerRed,
                         size: 20,
                       ),
                       onPressed: () {
@@ -1932,7 +1932,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
               trailing: IconButton(
                 icon: const Icon(
                   Icons.delete_outline_rounded,
-                  color: Colors.redAccent,
+                  color: AppTheme.dangerRed,
                 ),
                 onPressed: () {
                   final updated = [..._project.textTracks]..removeAt(i);

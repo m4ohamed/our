@@ -206,11 +206,11 @@ class _EventFormSheetState extends State<EventFormSheet> {
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : _save,
                   child: _isSaving
-                      ? const SizedBox.square(
+                      ? SizedBox.square(
                           dimension: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: theme.colorScheme.onPrimary,
                           ),
                         )
                       : Text(isEditing ? s.saveChanges : s.addEvent),
@@ -303,10 +303,12 @@ class _EventFormSheetState extends State<EventFormSheet> {
                 top: 8,
                 right: 8,
                 child: IconButton.filled(
-                  style: IconButton.styleFrom(backgroundColor: Colors.black54),
-                  icon: const Icon(
+                  style: IconButton.styleFrom(
+                    backgroundColor: theme.colorScheme.scrim.withValues(alpha: 0.54),
+                  ),
+                  icon: Icon(
                     Icons.close_rounded,
-                    color: Colors.white,
+                    color: theme.colorScheme.onPrimary,
                     size: 18,
                   ),
                   onPressed: () {
@@ -413,7 +415,7 @@ class _EventFormSheetState extends State<EventFormSheet> {
                     border: Border.all(
                       color: selected
                           ? theme.colorScheme.primary
-                          : Colors.transparent,
+                          : theme.colorScheme.surface.withValues(alpha: 0),
                       width: 2,
                     ),
                   ),

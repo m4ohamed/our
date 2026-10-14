@@ -33,7 +33,7 @@ class BabyCountdownScreen extends ConsumerWidget {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: theme.colorScheme.surface.withValues(alpha: 0),
         elevation: 0,
         leading: IconButton(
           icon: Icon(
@@ -309,8 +309,8 @@ class _BabyArrivalBackground extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: isLight
                 ? [
-                    const Color(0xFFE3F2FD),
-                    const Color(0xFFF3E5F5),
+                    theme.colorScheme.primaryContainer,
+                    theme.colorScheme.tertiaryContainer,
                     theme.colorScheme.surface,
                   ]
                 : [
@@ -318,7 +318,7 @@ class _BabyArrivalBackground extends StatelessWidget {
                     theme.colorScheme.surfaceContainerHighest.withValues(
                       alpha: 0.5,
                     ),
-                    const Color(0xFF1A237E).withValues(alpha: 0.1),
+                    theme.colorScheme.secondaryContainer.withValues(alpha: 0.2),
                   ],
           ),
         ),

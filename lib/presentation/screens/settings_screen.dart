@@ -7,6 +7,7 @@ import '../../generated/l10n.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../domain/entities/entities.dart';
+import '../../theme/app_theme.dart';
 import '../providers/app_providers.dart';
 import '../providers/media_provider.dart';
 import 'pin_setup_screen.dart';
@@ -89,7 +90,7 @@ class _SettingsBody extends ConsumerWidget {
                     selectedColor: Theme.of(context).colorScheme.primary,
                     labelStyle: TextStyle(
                       color: myRole == 'p1'
-                          ? Colors.white
+                          ? Theme.of(context).colorScheme.onPrimary
                           : Theme.of(context).colorScheme.onSurface,
                     ),
                     onSelected: (v) {
@@ -108,7 +109,7 @@ class _SettingsBody extends ConsumerWidget {
                     selectedColor: Theme.of(context).colorScheme.tertiary,
                     labelStyle: TextStyle(
                       color: myRole == 'p2'
-                          ? Colors.white
+                          ? Theme.of(context).colorScheme.onPrimary
                           : Theme.of(context).colorScheme.onSurface,
                     ),
                     onSelected: (v) {
@@ -136,7 +137,7 @@ class _SettingsBody extends ConsumerWidget {
                     ? Icons.cloud_done_rounded
                     : Icons.cloud_off_rounded,
                 color: isFirestoreConnected
-                    ? const Color(0xFF10B981)
+                    ? AppTheme.successColor(context)
                     : Theme.of(context).colorScheme.outline,
               ),
               title: Text(
@@ -162,7 +163,7 @@ class _SettingsBody extends ConsumerWidget {
               leading: Icon(
                 Icons.notifications_active_rounded,
                 color: oneSignal.isFullyConfigured
-                    ? const Color(0xFF10B981)
+                    ? AppTheme.successColor(context)
                     : Theme.of(context).colorScheme.primary,
               ),
               title: Text(
@@ -236,7 +237,7 @@ class _SettingsBody extends ConsumerWidget {
                     selectedColor: Theme.of(context).colorScheme.primary,
                     labelStyle: TextStyle(
                       color: currentLocale.languageCode == 'ar'
-                          ? Colors.white
+                          ? Theme.of(context).colorScheme.onPrimary
                           : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
@@ -252,7 +253,7 @@ class _SettingsBody extends ConsumerWidget {
                     selectedColor: Theme.of(context).colorScheme.primary,
                     labelStyle: TextStyle(
                       color: currentLocale.languageCode == 'en'
-                          ? Colors.white
+                          ? Theme.of(context).colorScheme.onPrimary
                           : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
@@ -452,14 +453,29 @@ class _SettingsBody extends ConsumerWidget {
           title: s.dataManagement,
           delay: 500,
           children: [
+            SwitchListTile(
+              title: Text(
+                'البيانات التجريبية الأولية (Demo Data)',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                'عرض الذكريات التجريبية عند كون التطبيق فارغاً',
+                style: GoogleFonts.cairo(fontSize: 12),
+              ),
+              value: settings.enableDemoData,
+              thumbColor: WidgetStatePropertyAll(
+                Theme.of(context).colorScheme.primary,
+              ),
+              onChanged: (_) => notifier.toggleDemoData(),
+            ),
             ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.delete_forever,
-                color: Colors.redAccent,
+                color: Theme.of(context).colorScheme.error,
               ),
               title: Text(
                 s.deleteAllData,
-                style: GoogleFonts.cairo(color: Colors.redAccent),
+                style: GoogleFonts.cairo(color: Theme.of(context).colorScheme.error),
               ),
               subtitle: Text(
                 s.resetAppCompletely,
@@ -736,7 +752,7 @@ class _SettingsBody extends ConsumerWidget {
         backgroundColor: Theme.of(context).colorScheme.surface,
         title: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+            Icon(Icons.warning_amber_rounded, color: Theme.of(context).colorScheme.error),
             const SizedBox(width: 8),
             Text(
               s.confirmReset,
@@ -760,12 +776,12 @@ class _SettingsBody extends ConsumerWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(s.dataCleared),
-                    backgroundColor: Colors.redAccent,
+                    backgroundColor: Theme.of(context).colorScheme.error,
                   ),
                 );
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             child: Text(s.delete),
           ),
         ],

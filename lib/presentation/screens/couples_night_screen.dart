@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../theme/app_theme.dart';
 import '../../domain/entities/entities.dart';
 import '../providers/app_providers.dart';
 
@@ -255,7 +256,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
   String _speedSignal = 'idle'; // 'idle' | 'wait' | 'green' | 'red'
   final Stopwatch _speedStopwatch = Stopwatch();
   String _speedBannerText = '⏱️ اضغط هنا لبدء جولة السرعة';
-  Color _speedBannerColor = const Color(0xFFFDF2F8);
+  Color _speedBannerColor = AppTheme.primaryRose;
   bool _speedBannerDarkText = true;
   int _lastHandledSpeedEventId = 0;
 
@@ -1016,7 +1017,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
     _speedTimer?.cancel();
     setState(() {
       _speedSignal = 'wait';
-      _speedBannerColor = const Color(0xFFF59E0B);
+      _speedBannerColor = AppTheme.amberGold;
       _speedBannerDarkText = false;
       _speedBannerText = '⚠️ استعد... ركّز في اللون القادم!';
     });
@@ -1031,7 +1032,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
         HapticFeedback.vibrate();
         setState(() {
           _speedSignal = 'red';
-          _speedBannerColor = const Color(0xFFEF4444);
+          _speedBannerColor = AppTheme.dangerRed;
           _speedBannerDarkText = false;
           _speedBannerText = '🔴 فخ أحمر! لا تضغط أبداً! ⛔';
         });
@@ -1039,7 +1040,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           if (mounted && _speedSignal == 'red') {
             setState(() {
               _speedSignal = 'idle';
-              _speedBannerColor = const Color(0xFFFDF2F8);
+              _speedBannerColor = AppTheme.subtleSurface(context);
               _speedBannerDarkText = true;
               _speedBannerText = '👏 نجوتما من الفخ! اضغط لجولة جديدة';
             });
@@ -1049,7 +1050,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
         HapticFeedback.selectionClick();
         setState(() {
           _speedSignal = 'green';
-          _speedBannerColor = const Color(0xFF10B981);
+          _speedBannerColor = AppTheme.emeraldGreen;
           _speedBannerDarkText = false;
           _speedBannerText = '🟢 أخضر! اضغط الآن فوراً!! ⚡';
         });
@@ -1179,17 +1180,11 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgGradient = isDark
-        ? const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF13091C), Color(0xFF1E102A), Color(0xFF2A0F26)],
-          )
-        : const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFFFF1F2), Color(0xFFFDF2F8), Color(0xFFF3E8FF)],
-          );
+    final bgGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: AppTheme.pageGradientColors(context),
+    );
 
     final unredeemedCoupons = _coupons.where((c) => !c.done).length;
 
@@ -1268,13 +1263,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 blastDirectionality: BlastDirectionality.explosive,
                 shouldLoop: false,
                 numberOfParticles: 30,
-                colors: const [
-                  Color(0xFFF43F5E),
-                  Color(0xFF9333EA),
-                  Color(0xFF10B981),
-                  Color(0xFFF59E0B),
-                  Color(0xFFEC4899),
-                ],
+                colors: AppTheme.confettiPalette(context),
               ),
             ),
           ],
@@ -1284,10 +1273,10 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
   }
 
   Widget _buildCloudBar(bool isDark) {
-    final cardColor = isDark ? const Color(0xFF2D193F) : Colors.white;
+    final cardColor = isDark ? AppTheme.cardSurface(context) : AppTheme.white;
     final dotColor = _roomId == null
-        ? Colors.grey
-        : (_partnerOnline ? const Color(0xFF10B981) : const Color(0xFFF59E0B));
+        ? Theme.of(context).colorScheme.outline
+        : (_partnerOnline ? AppTheme.emeraldGreen : AppTheme.amberGold);
     final statusText = _roomId == null
         ? 'الوضع: جهاز واحد (مرّر الهاتف)'
         : (_partnerOnline
@@ -1300,7 +1289,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
         color: cardColor,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: const Color(0xFFF43F5E).withValues(alpha: 0.22),
+          color: AppTheme.primaryRose.withValues(alpha: 0.22),
         ),
       ),
       child: Row(
@@ -1341,10 +1330,10 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFFF43F5E).withValues(alpha: 0.14),
+                color: AppTheme.primaryRose.withValues(alpha: 0.14),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: const Color(0xFFF43F5E).withValues(alpha: 0.3),
+                  color: AppTheme.primaryRose.withValues(alpha: 0.3),
                 ),
               ),
               child: Text(
@@ -1352,7 +1341,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 style: GoogleFonts.cairo(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFFF43F5E),
+                  color: AppTheme.primaryRose,
                 ),
               ),
             ),
@@ -1364,8 +1353,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
 
   Widget _buildTopHeader(bool isDark, int unredeemedCoupons) {
     final cardColor = isDark
-        ? const Color(0xFF221430).withValues(alpha: 0.92)
-        : Colors.white.withValues(alpha: 0.92);
+        ? AppTheme.cardSurface(context).withValues(alpha: 0.92)
+        : AppTheme.white.withValues(alpha: 0.92);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1373,7 +1362,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
         color: cardColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFF43F5E).withValues(alpha: 0.2),
+          color: AppTheme.primaryRose.withValues(alpha: 0.2),
         ),
       ),
       child: Row(
@@ -1396,7 +1385,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                       style: GoogleFonts.cairo(
                         fontSize: 15,
                         fontWeight: FontWeight.w900,
-                        color: const Color(0xFFF43F5E),
+                        color: AppTheme.primaryRose,
                         height: 1.15,
                       ),
                     ),
@@ -1405,7 +1394,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                       style: GoogleFonts.cairo(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white70 : Colors.grey.shade600,
+                        color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
                       ),
                     ),
                   ],
@@ -1450,8 +1439,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
 
   Widget _buildHudPanel(bool isDark) {
     final cardColor = isDark
-        ? const Color(0xFF221430).withValues(alpha: 0.92)
-        : Colors.white.withValues(alpha: 0.92);
+        ? AppTheme.cardSurface(context).withValues(alpha: 0.92)
+        : AppTheme.white.withValues(alpha: 0.92);
 
     // Determine whose turn it is for highlight
     bool p1Active = false;
@@ -1472,7 +1461,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
         color: cardColor,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFFF43F5E).withValues(alpha: 0.2),
+          color: AppTheme.primaryRose.withValues(alpha: 0.2),
         ),
       ),
       child: Column(
@@ -1484,7 +1473,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   emoji: '🤴',
                   name: _p1Name,
                   score: _p1Score,
-                  accentColor: const Color(0xFFF43F5E),
+                  accentColor: AppTheme.primaryRose,
                   isActiveTurn: p1Active,
                   isMyDevice: _roomId != null && _myRole == 'p1',
                   isDark: isDark,
@@ -1505,7 +1494,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   emoji: '👸',
                   name: _p2Name,
                   score: _p2Score,
-                  accentColor: const Color(0xFF9333EA),
+                  accentColor: AppTheme.secondaryPurple,
                   isActiveTurn: p2Active,
                   isMyDevice: _roomId != null && _myRole == 'p2',
                   isDark: isDark,
@@ -1521,7 +1510,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 style: GoogleFonts.cairo(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white70 : Colors.grey.shade700,
+                  color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
                 ),
               ),
               const SizedBox(width: 8),
@@ -1531,15 +1520,15 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   child: Container(
                     height: 8,
                     color: isDark
-                        ? const Color(0xFF39204F)
-                        : const Color(0xFFFDF2F8),
+                        ? AppTheme.subtleSurface(context)
+                        : AppTheme.subtleSurface(context),
                     alignment: Alignment.centerRight,
                     child: FractionallySizedBox(
                       widthFactor: (_harmony.clamp(10, 100)) / 100.0,
                       child: Container(
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Color(0xFFF43F5E), Color(0xFF9333EA)],
+                            colors: [AppTheme.primaryRose, AppTheme.secondaryPurple],
                           ),
                         ),
                       ),
@@ -1553,7 +1542,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 style: GoogleFonts.cairo(
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
-                  color: const Color(0xFFF43F5E),
+                  color: AppTheme.primaryRose,
                 ),
               ),
             ],
@@ -1577,11 +1566,11 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: isDark
-            ? const Color(0xFF221430).withValues(alpha: 0.92)
-            : Colors.white.withValues(alpha: 0.92),
+            ? AppTheme.cardSurface(context).withValues(alpha: 0.92)
+            : AppTheme.white.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFF43F5E).withValues(alpha: 0.2),
+          color: AppTheme.primaryRose.withValues(alpha: 0.2),
         ),
       ),
       child: Row(
@@ -1599,13 +1588,13 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? (isDark ? const Color(0xFF2D193F) : Colors.white)
-                      : Colors.transparent,
+                      ? (isDark ? AppTheme.cardSurface(context) : AppTheme.white)
+                      : AppTheme.transparentColor,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
+                            color: AppTheme.black.withValues(alpha: 0.08),
                             blurRadius: 6,
                           ),
                         ]
@@ -1621,8 +1610,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
                         color: isSelected
-                            ? const Color(0xFFF43F5E)
-                            : (isDark ? Colors.white60 : Colors.grey.shade600),
+                            ? AppTheme.primaryRose
+                            : (isDark ? AppTheme.white.withValues(alpha: 0.6) : Theme.of(context).colorScheme.outline),
                       ),
                     ),
                   ],
@@ -1637,8 +1626,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
 
   Widget _buildStageCard(bool isDark) {
     final cardColor = isDark
-        ? const Color(0xFF221430).withValues(alpha: 0.94)
-        : Colors.white.withValues(alpha: 0.94);
+        ? AppTheme.cardSurface(context).withValues(alpha: 0.94)
+        : AppTheme.white.withValues(alpha: 0.94);
 
     Widget content;
     switch (_activeTab) {
@@ -1670,11 +1659,11 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
         color: cardColor,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFFF43F5E).withValues(alpha: 0.2),
+          color: AppTheme.primaryRose.withValues(alpha: 0.2),
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFF43F5E).withValues(alpha: 0.08),
+            color: AppTheme.primaryRose.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1693,28 +1682,28 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
         '💬',
         'كاشف القلوب',
         'أسئلة مصنفة وتخمين سري',
-        const Color(0xFFF43F5E),
+        AppTheme.primaryRose,
       ),
       (
         'whosmore',
         '🤔',
         'تحدي مين فينا؟',
         'تصويت متزامن وكشف طريف',
-        const Color(0xFF9333EA),
+        AppTheme.secondaryPurple,
       ),
       (
         'xo',
         '⭕',
         'إكس-أو الذكية',
         'نظام 3 قلوب متحركة بلا تعادل!',
-        const Color(0xFF10B981),
+        AppTheme.emeraldGreen,
       ),
       (
         'wheel',
         '🎡',
         'عجلة وقسائم الدلال',
         'مكافآت تُحفظ في محفظتكما',
-        const Color(0xFFF59E0B),
+        AppTheme.amberGold,
       ),
     ];
 
@@ -1737,7 +1726,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
               'اجمعوا نقاط التناغم معاً، تنافسوا في الألعاب الخمس، واربحوا قسائم الدلال!',
               style: GoogleFonts.cairo(
                 fontSize: 11.5,
-                color: isDark ? Colors.white70 : Colors.grey.shade600,
+                color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
               ),
               textAlign: TextAlign.center,
             ),
@@ -1762,7 +1751,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF2D193F) : Colors.white,
+                      color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: m.$5.withValues(alpha: 0.35),
@@ -1788,8 +1777,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                           style: GoogleFonts.cairo(
                             fontSize: 10,
                             color: isDark
-                                ? Colors.white60
-                                : Colors.grey.shade600,
+                                ? AppTheme.white.withValues(alpha: 0.6)
+                                : Theme.of(context).colorScheme.outline,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1837,13 +1826,13 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   color: active
-                      ? Colors.white
-                      : (isDark ? Colors.white70 : Colors.grey.shade700),
+                      ? AppTheme.white
+                      : (isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline),
                 ),
               ),
               selected: active,
-              selectedColor: const Color(0xFFF43F5E),
-              backgroundColor: isDark ? const Color(0xFF2D193F) : Colors.white,
+              selectedColor: AppTheme.primaryRose,
+              backgroundColor: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
               onSelected: (_) => _selectTawafoqCategory(c),
             ),
           );
@@ -1873,7 +1862,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
               'استعد! بمجرد أن يختار، ستظهر لك الخيارات على شاشتك لتخمّن إجابته.',
               style: GoogleFonts.cairo(
                 fontSize: 12.5,
-                color: isDark ? Colors.white70 : Colors.grey.shade600,
+                color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
               ),
               textAlign: TextAlign.center,
             ),
@@ -1895,7 +1884,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 style: GoogleFonts.cairo(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFFF43F5E),
+                  color: AppTheme.primaryRose,
                 ),
               ),
               Text(
@@ -1903,7 +1892,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 style: GoogleFonts.cairo(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white60 : Colors.grey.shade600,
+                  color: isDark ? AppTheme.white.withValues(alpha: 0.6) : Theme.of(context).colorScheme.outline,
                 ),
               ),
             ],
@@ -1912,10 +1901,10 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF2D193F) : Colors.white,
+              color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFFF43F5E).withValues(alpha: 0.25),
+                color: AppTheme.primaryRose.withValues(alpha: 0.25),
               ),
             ),
             child: Text(
@@ -1961,7 +1950,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             'تم إخفاء الإجابة السرية! حان دور $guesserName ليخمن الاختيار الصحيح.',
             style: GoogleFonts.cairo(
               fontSize: 12.5,
-              color: isDark ? Colors.white70 : Colors.grey.shade600,
+              color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
             ),
             textAlign: TextAlign.center,
           ),
@@ -1997,7 +1986,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
               'ترقّب النتيجة؛ ستظهر على شاشتيكما معاً فور اختياره!',
               style: GoogleFonts.cairo(
                 fontSize: 12.5,
-                color: isDark ? Colors.white70 : Colors.grey.shade600,
+                color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
               ),
               textAlign: TextAlign.center,
             ),
@@ -2016,7 +2005,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 style: GoogleFonts.cairo(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF9333EA),
+                  color: AppTheme.secondaryPurple,
                 ),
               ),
               Text(
@@ -2024,7 +2013,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 style: GoogleFonts.cairo(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white60 : Colors.grey.shade600,
+                  color: isDark ? AppTheme.white.withValues(alpha: 0.6) : Theme.of(context).colorScheme.outline,
                 ),
               ),
             ],
@@ -2033,10 +2022,10 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF2D193F) : Colors.white,
+              color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFF9333EA).withValues(alpha: 0.25),
+                color: AppTheme.secondaryPurple.withValues(alpha: 0.25),
               ),
             ),
             child: Text(
@@ -2089,7 +2078,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           style: GoogleFonts.cairo(
             fontSize: 16.5,
             fontWeight: FontWeight.w900,
-            color: matched ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
+            color: matched ? AppTheme.emeraldGreen : AppTheme.primaryRose,
           ),
           textAlign: TextAlign.center,
         ),
@@ -2098,9 +2087,9 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           width: double.infinity,
           padding: const EdgeInsets.all(11),
           decoration: BoxDecoration(
-            color: const Color(0xFF10B981).withValues(alpha: 0.12),
+            color: AppTheme.emeraldGreen.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF10B981), width: 1.4),
+            border: Border.all(color: AppTheme.emeraldGreen, width: 1.4),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2110,7 +2099,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 style: GoogleFonts.cairo(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF10B981),
+                  color: AppTheme.emeraldGreen,
                 ),
               ),
               Text(
@@ -2128,10 +2117,10 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           width: double.infinity,
           padding: const EdgeInsets.all(11),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF39204F) : const Color(0xFFFDF2F8),
+            color: isDark ? AppTheme.subtleSurface(context) : AppTheme.subtleSurface(context),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color(0xFFF43F5E).withValues(alpha: 0.25),
+              color: AppTheme.primaryRose.withValues(alpha: 0.25),
             ),
           ),
           child: Column(
@@ -2142,7 +2131,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 style: GoogleFonts.cairo(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white70 : Colors.grey.shade600,
+                  color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
                 ),
               ),
               Text(
@@ -2188,7 +2177,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             style: GoogleFonts.cairo(
               fontSize: 17,
               fontWeight: FontWeight.w900,
-              color: agreed ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
+              color: agreed ? AppTheme.emeraldGreen : AppTheme.primaryRose,
             ),
             textAlign: TextAlign.center,
           ),
@@ -2197,7 +2186,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             '"$qText"',
             style: GoogleFonts.cairo(
               fontSize: 13,
-              color: isDark ? Colors.white70 : Colors.grey.shade600,
+              color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
             ),
             textAlign: TextAlign.center,
           ),
@@ -2208,10 +2197,10 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF2D193F) : Colors.white,
+                    color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: const Color(0xFFF43F5E).withValues(alpha: 0.3),
+                      color: AppTheme.primaryRose.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Column(
@@ -2220,7 +2209,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                         'تصويت $_p1Name:',
                         style: GoogleFonts.cairo(
                           fontSize: 11,
-                          color: isDark ? Colors.white60 : Colors.grey.shade600,
+                          color: isDark ? AppTheme.white.withValues(alpha: 0.6) : Theme.of(context).colorScheme.outline,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -2229,7 +2218,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                         style: GoogleFonts.cairo(
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
-                          color: const Color(0xFFF43F5E),
+                          color: AppTheme.primaryRose,
                         ),
                       ),
                     ],
@@ -2241,10 +2230,10 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF2D193F) : Colors.white,
+                    color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: const Color(0xFF9333EA).withValues(alpha: 0.3),
+                      color: AppTheme.secondaryPurple.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Column(
@@ -2253,7 +2242,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                         'تصويت $_p2Name:',
                         style: GoogleFonts.cairo(
                           fontSize: 11,
-                          color: isDark ? Colors.white60 : Colors.grey.shade600,
+                          color: isDark ? AppTheme.white.withValues(alpha: 0.6) : Theme.of(context).colorScheme.outline,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -2262,7 +2251,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                         style: GoogleFonts.cairo(
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
-                          color: const Color(0xFF9333EA),
+                          color: AppTheme.secondaryPurple,
                         ),
                       ),
                     ],
@@ -2299,7 +2288,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             'بانتظار شريكك ليصوّت من هاتفه لنكشف الإجابتين معاً...',
             style: GoogleFonts.cairo(
               fontSize: 12.5,
-              color: isDark ? Colors.white70 : Colors.grey.shade600,
+              color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
             ),
             textAlign: TextAlign.center,
           ),
@@ -2313,7 +2302,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: const Color(0xFF9333EA).withValues(alpha: 0.16),
+            color: AppTheme.secondaryPurple.withValues(alpha: 0.16),
             borderRadius: BorderRadius.circular(99),
           ),
           child: Text(
@@ -2321,7 +2310,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             style: GoogleFonts.cairo(
               fontSize: 11.5,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF9333EA),
+              color: AppTheme.secondaryPurple,
             ),
           ),
         ),
@@ -2330,10 +2319,10 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2D193F) : Colors.white,
+            color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: const Color(0xFFF43F5E).withValues(alpha: 0.25),
+              color: AppTheme.primaryRose.withValues(alpha: 0.25),
             ),
           ),
           child: Text(
@@ -2351,7 +2340,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           'بصراحة.. مين فينا ينطبق عليه هذا الوصف أكثر؟',
           style: GoogleFonts.cairo(
             fontSize: 12,
-            color: isDark ? Colors.white70 : Colors.grey.shade600,
+            color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
           ),
         ),
         const SizedBox(height: 14),
@@ -2360,8 +2349,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF43F5E),
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppTheme.primaryRose,
+                  foregroundColor: AppTheme.white,
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -2381,8 +2370,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9333EA),
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppTheme.secondaryPurple,
+                  foregroundColor: AppTheme.white,
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -2432,7 +2421,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   style: GoogleFonts.cairo(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFFF43F5E),
+                    color: AppTheme.primaryRose,
                   ),
                 ),
                 Container(
@@ -2442,8 +2431,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   ),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? const Color(0xFF39204F)
-                        : const Color(0xFFFDF2F8),
+                        ? AppTheme.subtleSurface(context)
+                        : AppTheme.subtleSurface(context),
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
@@ -2461,7 +2450,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
               'عند وضع قلبك الرابع، يختفي أقدم قلب لك تلقائياً.. لا يوجد تعادل ممل بعد اليوم!',
               style: GoogleFonts.cairo(
                 fontSize: 10.5,
-                color: isDark ? Colors.white60 : Colors.grey.shade600,
+                color: isDark ? AppTheme.white.withValues(alpha: 0.6) : Theme.of(context).colorScheme.outline,
               ),
             ),
           ],
@@ -2492,13 +2481,13 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                     child: Container(
                       decoration: BoxDecoration(
                         color: isWin
-                            ? const Color(0xFF10B981).withValues(alpha: 0.22)
-                            : (isDark ? const Color(0xFF2D193F) : Colors.white),
+                            ? AppTheme.emeraldGreen.withValues(alpha: 0.22)
+                            : (isDark ? AppTheme.cardSurface(context) : AppTheme.white),
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
                           color: isWin
-                              ? const Color(0xFF10B981)
-                              : const Color(0xFFF43F5E).withValues(alpha: 0.25),
+                              ? AppTheme.emeraldGreen
+                              : AppTheme.primaryRose.withValues(alpha: 0.25),
                           width: isWin ? 2.4 : 1.8,
                         ),
                       ),
@@ -2514,7 +2503,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                                 style: GoogleFonts.cairo(
                                   fontSize: 8.5,
                                   fontWeight: FontWeight.w900,
-                                  color: const Color(0xFFF43F5E),
+                                  color: AppTheme.primaryRose,
                                 ),
                               ),
                             ),
@@ -2544,8 +2533,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
     final bottomName = bottomRole == 'p2' ? _p2Name : _p1Name;
     final bottomEmoji = bottomRole == 'p2' ? '👸' : '🤴';
     final bottomGradient = bottomRole == 'p2'
-        ? const [Color(0xFFA855F7), Color(0xFF7E22CE)]
-        : const [Color(0xFFF43F5E), Color(0xFFE11D48)];
+        ? [AppTheme.secondaryPurpleLight, AppTheme.secondaryPurpleDark]
+        : [AppTheme.primaryRose, AppTheme.primaryRoseDark];
 
     return Column(
       children: [
@@ -2557,7 +2546,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           'اضغط عند ظهور الأخضر 🟢 واحذر فخ الأحمر 🔴',
           style: GoogleFonts.cairo(
             fontSize: 11,
-            color: isDark ? Colors.white60 : Colors.grey.shade600,
+            color: isDark ? AppTheme.white.withValues(alpha: 0.6) : Theme.of(context).colorScheme.outline,
           ),
         ),
         const SizedBox(height: 8),
@@ -2570,8 +2559,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFA855F7), Color(0xFF7E22CE)],
+                    gradient: LinearGradient(
+                      colors: [AppTheme.secondaryPurpleLight, AppTheme.secondaryPurpleDark],
                     ),
                     borderRadius: BorderRadius.circular(18),
                   ),
@@ -2582,7 +2571,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                       Text(
                         'منطقة $_p2Name',
                         style: GoogleFonts.cairo(
-                          color: Colors.white,
+                          color: AppTheme.white,
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
                         ),
@@ -2602,11 +2591,11 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
             decoration: BoxDecoration(
               color: _speedBannerDarkText
-                  ? (isDark ? const Color(0xFF39204F) : const Color(0xFFFDF2F8))
+                  ? (isDark ? AppTheme.subtleSurface(context) : AppTheme.subtleSurface(context))
                   : _speedBannerColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFFF43F5E).withValues(alpha: 0.3),
+                color: AppTheme.primaryRose.withValues(alpha: 0.3),
                 width: 1.8,
               ),
             ),
@@ -2617,8 +2606,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 fontSize: 13.5,
                 fontWeight: FontWeight.w900,
                 color: _speedBannerDarkText
-                    ? (isDark ? Colors.white : const Color(0xFF1F2937))
-                    : Colors.white,
+                    ? (isDark ? AppTheme.white : Theme.of(context).colorScheme.onSurface)
+                    : AppTheme.white,
               ),
             ),
           ),
@@ -2640,7 +2629,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   Text(
                     'اضغط هنا بأقصى سرعة! ($bottomName)',
                     style: GoogleFonts.cairo(
-                      color: Colors.white,
+                      color: AppTheme.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w900,
                     ),
@@ -2673,7 +2662,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
               'كل جائزة تربحها تتحول إلى "قسيمة دلال" في محفظتكما 🎟️',
               style: GoogleFonts.cairo(
                 fontSize: 11,
-                color: isDark ? Colors.white60 : Colors.grey.shade600,
+                color: isDark ? AppTheme.white.withValues(alpha: 0.6) : Theme.of(context).colorScheme.outline,
               ),
             ),
           ],
@@ -2692,27 +2681,27 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                     angle: _wheelCurrentAngle,
                   ),
                 ),
-                const Positioned(
+                Positioned(
                   top: 0,
                   child: Icon(
                     Icons.arrow_drop_down_rounded,
                     size: 38,
-                    color: Color(0xFFF43F5E),
+                    color: AppTheme.primaryRose,
                   ),
                 ),
                 Container(
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.white,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: const Color(0xFFF43F5E),
+                      color: AppTheme.primaryRose,
                       width: 3,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
+                        color: AppTheme.black.withValues(alpha: 0.15),
                         blurRadius: 8,
                       ),
                     ],
@@ -2728,10 +2717,10 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF39204F) : const Color(0xFFFDF2F8),
+            color: isDark ? AppTheme.subtleSurface(context) : AppTheme.subtleSurface(context),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color(0xFFF43F5E).withValues(alpha: 0.25),
+              color: AppTheme.primaryRose.withValues(alpha: 0.25),
             ),
           ),
           child: Text(
@@ -2740,7 +2729,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             style: GoogleFonts.cairo(
               fontSize: 12,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFFF43F5E),
+              color: AppTheme.primaryRose,
             ),
           ),
         ),
@@ -2758,11 +2747,11 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
         color: isDark
-            ? const Color(0xFF221430).withValues(alpha: 0.92)
-            : Colors.white.withValues(alpha: 0.92),
+            ? AppTheme.cardSurface(context).withValues(alpha: 0.92)
+            : AppTheme.white.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(99),
         border: Border.all(
-          color: const Color(0xFFF43F5E).withValues(alpha: 0.2),
+          color: AppTheme.primaryRose.withValues(alpha: 0.2),
         ),
       ),
       child: Row(
@@ -2773,7 +2762,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             style: GoogleFonts.cairo(
               fontSize: 10.5,
               fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white70 : Colors.grey.shade600,
+              color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
             ),
           ),
           const SizedBox(width: 8),
@@ -2800,7 +2789,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppTheme.transparentColor,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return StatefulBuilder(
@@ -2814,7 +2803,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF2D193F) : Colors.white,
+                    color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(28),
                     ),
@@ -2843,7 +2832,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                         'تزامن فوري عبر Cloud Firestore: حتى لو انقطع الإنترنت لثوانٍ تبقى الغرفة والنقاط محفوظة!',
                         style: GoogleFonts.cairo(
                           fontSize: 12,
-                          color: isDark ? Colors.white70 : Colors.grey.shade600,
+                          color: isDark ? AppTheme.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.outline,
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -2852,11 +2841,11 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
                             color: isDark
-                                ? const Color(0xFF39204F)
-                                : const Color(0xFFFDF2F8),
+                                ? AppTheme.subtleSurface(context)
+                                : AppTheme.subtleSurface(context),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: const Color(0xFFF43F5E),
+                              color: AppTheme.primaryRose,
                               width: 1.5,
                             ),
                           ),
@@ -2867,7 +2856,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                                 style: GoogleFonts.cairo(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF10B981),
+                                  color: AppTheme.emeraldGreen,
                                 ),
                               ),
                               Text(
@@ -2876,7 +2865,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                                   fontSize: 32,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 8,
-                                  color: const Color(0xFFF43F5E),
+                                  color: AppTheme.primaryRose,
                                 ),
                               ),
                               TextButton.icon(
@@ -2906,8 +2895,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                           Expanded(
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFF43F5E),
-                                foregroundColor: Colors.white,
+                                backgroundColor: AppTheme.primaryRose,
+                                foregroundColor: AppTheme.white,
                                 padding: const EdgeInsets.symmetric(vertical: 11),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
@@ -2922,8 +2911,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                           Expanded(
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF9333EA),
-                                foregroundColor: Colors.white,
+                                backgroundColor: AppTheme.secondaryPurple,
+                                foregroundColor: AppTheme.white,
                                 padding: const EdgeInsets.symmetric(vertical: 11),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
@@ -2973,8 +2962,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                                 hintText: '4829',
                                 filled: true,
                                 fillColor: isDark
-                                    ? const Color(0xFF39204F)
-                                    : const Color(0xFFFDF2F8),
+                                    ? AppTheme.subtleSurface(context)
+                                    : AppTheme.subtleSurface(context),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: BorderSide.none,
@@ -2985,8 +2974,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                           const SizedBox(width: 8),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF9333EA),
-                              foregroundColor: Colors.white,
+                              backgroundColor: AppTheme.secondaryPurple,
+                              foregroundColor: AppTheme.white,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 18,
                                 vertical: 14,
@@ -3033,7 +3022,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
   void _showCouponsModal() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppTheme.transparentColor,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return StatefulBuilder(
@@ -3043,7 +3032,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
               child: Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF2D193F) : Colors.white,
+                  color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(28),
                   ),
@@ -3076,8 +3065,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                           style: GoogleFonts.cairo(
                             fontSize: 13,
                             color: isDark
-                                ? Colors.white70
-                                : Colors.grey.shade600,
+                                ? AppTheme.white.withValues(alpha: 0.7)
+                                : Theme.of(context).colorScheme.outline,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -3097,8 +3086,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                               ),
                               decoration: BoxDecoration(
                                 color: isDark
-                                    ? const Color(0xFF39204F)
-                                    : const Color(0xFFFDF2F8),
+                                    ? AppTheme.subtleSurface(context)
+                                    : AppTheme.subtleSurface(context),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
                                   color: const Color(
@@ -3128,8 +3117,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                                           style: GoogleFonts.cairo(
                                             fontSize: 11,
                                             color: isDark
-                                                ? Colors.white60
-                                                : Colors.grey.shade600,
+                                                ? AppTheme.white.withValues(alpha: 0.6)
+                                                : Theme.of(context).colorScheme.outline,
                                           ),
                                         ),
                                       ],
@@ -3151,8 +3140,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                                         fontSize: 11.5,
                                         fontWeight: FontWeight.w900,
                                         color: c.done
-                                            ? const Color(0xFF10B981)
-                                            : const Color(0xFFF43F5E),
+                                            ? AppTheme.emeraldGreen
+                                            : AppTheme.primaryRose,
                                       ),
                                     ),
                                   ),
@@ -3180,7 +3169,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppTheme.transparentColor,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return Directionality(
@@ -3192,7 +3181,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF2D193F) : Colors.white,
+                color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(28),
                 ),
@@ -3249,7 +3238,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                     style: GoogleFonts.cairo(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFFF43F5E),
+                      color: AppTheme.primaryRose,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -3268,8 +3257,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                       const SizedBox(width: 8),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF43F5E),
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppTheme.primaryRose,
+                          foregroundColor: AppTheme.white,
                         ),
                         onPressed: () {
                           final txt = rewardCtrl.text.trim();
@@ -3371,10 +3360,10 @@ class _HeaderToolBtn extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2D193F) : Colors.white,
+            color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
             borderRadius: BorderRadius.circular(11),
             border: Border.all(
-              color: const Color(0xFFF43F5E).withValues(alpha: 0.22),
+              color: AppTheme.primaryRose.withValues(alpha: 0.22),
             ),
           ),
           child: Text(
@@ -3415,7 +3404,7 @@ class _PlayerScoreCard extends StatelessWidget {
           duration: const Duration(milliseconds: 220),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2D193F) : Colors.white,
+            color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
             borderRadius: BorderRadius.circular(15),
             border: Border.all(
               color: isActiveTurn
@@ -3462,7 +3451,7 @@ class _PlayerScoreCard extends StatelessWidget {
                 child: Text(
                   '$score',
                   style: GoogleFonts.cairo(
-                    color: Colors.white,
+                    color: AppTheme.white,
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
                   ),
@@ -3478,13 +3467,13 @@ class _PlayerScoreCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981),
+                color: AppTheme.emeraldGreen,
                 borderRadius: BorderRadius.circular(99),
               ),
               child: Text(
                 'جهازي 📱',
                 style: GoogleFonts.cairo(
-                  color: Colors.white,
+                  color: AppTheme.white,
                   fontSize: 8.5,
                   fontWeight: FontWeight.w900,
                 ),
@@ -3517,10 +3506,10 @@ class _OptionChoiceButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF2D193F) : Colors.white,
+          color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: const Color(0xFFF43F5E).withValues(alpha: 0.24),
+            color: AppTheme.primaryRose.withValues(alpha: 0.24),
             width: 1.4,
           ),
         ),
@@ -3556,8 +3545,8 @@ class _PrimaryActionButton extends StatelessWidget {
       width: double.infinity,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFF43F5E),
-          foregroundColor: Colors.white,
+          backgroundColor: AppTheme.primaryRose,
+          foregroundColor: AppTheme.white,
           padding: const EdgeInsets.symmetric(vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -3591,12 +3580,12 @@ class _SecondaryActionButton extends StatelessWidget {
       width: double.infinity,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFFF43F5E),
+          foregroundColor: AppTheme.primaryRose,
           backgroundColor: isDark
-              ? const Color(0xFF39204F)
-              : const Color(0xFFFDF2F8),
+              ? AppTheme.subtleSurface(context)
+              : AppTheme.subtleSurface(context),
           side: BorderSide(
-            color: const Color(0xFFF43F5E).withValues(alpha: 0.3),
+            color: AppTheme.primaryRose.withValues(alpha: 0.3),
           ),
           padding: const EdgeInsets.symmetric(vertical: 10),
           shape: RoundedRectangleBorder(
@@ -3634,7 +3623,7 @@ class _RewardsWheelPainter extends CustomPainter {
     final fillPaint = Paint()..style = PaintingStyle.fill;
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..color = Colors.white
+      ..color = AppTheme.white
       ..strokeWidth = 2.0;
 
     for (var i = 0; i < count; i++) {
@@ -3656,8 +3645,8 @@ class _RewardsWheelPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: shortText,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: AppTheme.white,
             fontSize: 9.5,
             fontWeight: FontWeight.bold,
           ),

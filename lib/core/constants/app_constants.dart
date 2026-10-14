@@ -40,6 +40,7 @@ class AppConstants {
   static const String keyPinHash = 'pin_hash';
   static const String keyBiometricEnabled = 'biometric_enabled';
   static const String keyLanguage = 'language';
+  static const String keyEnableDemoData = 'enable_demo_data';
   static const String keyDemoEventsSeeded = 'demo_events_seeded';
   static const String keyDemoMediaSeeded = 'demo_media_seeded';
   static const String keyCustomSurpriseMessages = 'custom_surprise_messages';
@@ -48,7 +49,7 @@ class AppConstants {
   static const String keyCloudinaryUploadPreset = 'cloudinary_upload_preset';
   static const String keyOneSignalAppId = 'onesignal_app_id';
   static const String keyOneSignalRestApiKey = 'onesignal_rest_api_key';
-  static const String keyMyPartnerRole = 'my_partner_role'; // 'p1' (محمد) or 'p2' (سارة)
+  static const String keyMyPartnerRole = 'my_partner_role';
   static const String keyCouplesNightState = 'couples_night_v2_state';
   static const String keyLoveCoupons = 'love_coupons_list';
 

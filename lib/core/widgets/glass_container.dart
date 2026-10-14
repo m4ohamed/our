@@ -1,6 +1,7 @@
 // lib/core/widgets/glass_container.dart
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class GlassContainer extends StatelessWidget {
   final Widget child;
@@ -22,13 +23,14 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final defaultSurface = isDark
-        ? const Color(0xFF2D193F).withValues(alpha: 0.88)
-        : Colors.white.withValues(alpha: 0.90);
-    final borderColor = isDark
-        ? const Color(0xFFFB7185).withValues(alpha: borderOpacity)
-        : const Color(0xFFF43F5E).withValues(alpha: borderOpacity);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final defaultSurface = AppTheme.cardSurface(
+      context,
+    ).withValues(alpha: isDark ? 0.88 : 0.90);
+    final borderColor = theme.colorScheme.primary.withValues(
+      alpha: borderOpacity,
+    );
 
     return RepaintBoundary(
       child: ClipRRect(
@@ -45,9 +47,9 @@ class GlassContainer extends StatelessWidget {
               border: Border.all(color: borderColor, width: 1.4),
               boxShadow: [
                 BoxShadow(
-                  color: isDark
-                      ? Colors.black.withValues(alpha: 0.35)
-                      : const Color(0xFFF43F5E).withValues(alpha: 0.08),
+                  color: theme.colorScheme.shadow.withValues(
+                    alpha: isDark ? 0.35 : 0.08,
+                  ),
                   blurRadius: 18,
                   offset: const Offset(0, 6),
                 ),

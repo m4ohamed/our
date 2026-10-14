@@ -260,7 +260,7 @@ class _SurpriseScreenState extends ConsumerState<SurpriseScreen>
   void _showSavedMessagesSheet(S s) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
           final prefs = ref.read(sharedPreferencesProvider);
@@ -318,9 +318,9 @@ class _SurpriseScreenState extends ConsumerState<SurpriseScreen>
                           style: GoogleFonts.notoSerif(fontSize: 15),
                         ),
                         trailing: IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.delete_outline_rounded,
-                            color: Colors.redAccent,
+                            color: theme.colorScheme.error,
                           ),
                           onPressed: () async {
                             final removedText = saved.removeAt(i);
@@ -363,7 +363,7 @@ class _SurpriseScreenState extends ConsumerState<SurpriseScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
         elevation: 0,
         leading: IconButton(
           icon: Icon(

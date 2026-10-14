@@ -1,4 +1,4 @@
-// lib/domain/entities/media_file_entity.dart
+// lib/domain/entities/entities.dart
 import 'package:flutter/foundation.dart';
 
 enum MediaType { photo, video }
@@ -84,7 +84,6 @@ class MediaFileEntity {
   int get hashCode => id.hashCode;
 }
 
-// lib/domain/entities/app_settings_entity.dart
 @immutable
 class AppSettingsEntity {
   final bool musicEnabled;
@@ -96,6 +95,7 @@ class AppSettingsEntity {
   final String? pinHash;
   final bool biometricEnabled;
   final String language;
+  final bool enableDemoData;
 
   const AppSettingsEntity({
     this.musicEnabled = true,
@@ -107,6 +107,7 @@ class AppSettingsEntity {
     this.pinHash,
     this.biometricEnabled = false,
     this.language = 'ar',
+    this.enableDemoData = true,
   });
 
   AppSettingsEntity copyWith({
@@ -119,6 +120,7 @@ class AppSettingsEntity {
     String? pinHash,
     bool? biometricEnabled,
     String? language,
+    bool? enableDemoData,
   }) {
     return AppSettingsEntity(
       musicEnabled: musicEnabled ?? this.musicEnabled,
@@ -130,8 +132,39 @@ class AppSettingsEntity {
       pinHash: pinHash ?? this.pinHash,
       biometricEnabled: biometricEnabled ?? this.biometricEnabled,
       language: language ?? this.language,
+      enableDemoData: enableDemoData ?? this.enableDemoData,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is AppSettingsEntity &&
+        other.musicEnabled == musicEnabled &&
+        other.musicVolume == musicVolume &&
+        other.notificationsEnabled == notificationsEnabled &&
+        other.animationsEnabled == animationsEnabled &&
+        other.themeMode == themeMode &&
+        other.pinEnabled == pinEnabled &&
+        other.pinHash == pinHash &&
+        other.biometricEnabled == biometricEnabled &&
+        other.language == language &&
+        other.enableDemoData == enableDemoData;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    musicEnabled,
+    musicVolume,
+    notificationsEnabled,
+    animationsEnabled,
+    themeMode,
+    pinEnabled,
+    pinHash,
+    biometricEnabled,
+    language,
+    enableDemoData,
+  );
 
   static const AppSettingsEntity defaults = AppSettingsEntity();
 }

@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../generated/l10n.dart';
 import '../providers/app_providers.dart';
 import '../../core/widgets/glass_container.dart';
+import '../../theme/app_theme.dart';
 import 'baby_countdown_screen.dart';
 import 'countdown_screen.dart';
 import 'couples_night_screen.dart';
@@ -135,12 +136,12 @@ class HomeScreen extends ConsumerWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: !isFirestoreConnected
-                  ? Colors.grey
+                  ? Theme.of(context).colorScheme.outline
                   : (partnerOnline
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFFF59E0B)),
+                        ? AppTheme.successColor(context)
+                        : AppTheme.warningColor(context)),
               boxShadow: partnerOnline
-                  ? const [BoxShadow(color: Color(0xFF10B981), blurRadius: 6)]
+                  ? [BoxShadow(color: AppTheme.successColor(context), blurRadius: 6)]
                   : null,
             ),
           ),
@@ -155,7 +156,7 @@ class HomeScreen extends ConsumerWidget {
               style: GoogleFonts.cairo(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w800,
-                color: isDark ? Colors.white : const Color(0xFF1F2937),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -186,8 +187,11 @@ class HomeScreen extends ConsumerWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFF43F5E), Color(0xFF9333EA)],
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.tertiary,
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -196,7 +200,7 @@ class HomeScreen extends ConsumerWidget {
                 style: GoogleFonts.cairo(
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                 ),
               ),
             ),
@@ -219,8 +223,11 @@ class HomeScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFF43F5E), Color(0xFF9333EA)],
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.tertiary,
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -267,7 +274,7 @@ class HomeScreen extends ConsumerWidget {
       expandedHeight: 100,
       floating: false,
       pinned: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppTheme.transparent(context),
       elevation: 0,
       leading: IconButton(
         tooltip: isDark ? 'الوضع النهاري ☀️' : 'وضع السهرة الليلي 🕯️',
@@ -474,7 +481,7 @@ class _NavigationGrid extends StatelessWidget {
           title: 'ثنائي المحبة 2.0',
           subtitle: 'سهرة الأزواج والألعاب 🎲',
           icon: Icons.sports_esports_rounded,
-          color: const Color(0xFFF43F5E),
+          color: Theme.of(context).colorScheme.primary,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const CouplesNightScreen()),
@@ -544,7 +551,7 @@ class _NavigationGrid extends StatelessWidget {
           title: 'عجلة الدلال',
           subtitle: 'قسائم ومكافآت 🎡🎟️',
           icon: Icons.redeem_rounded,
-          color: const Color(0xFF9333EA),
+          color: Theme.of(context).colorScheme.tertiary,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -650,24 +657,13 @@ class _Background extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Positioned.fill(
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: isDark
-                ? const [
-                    Color(0xFF13091C),
-                    Color(0xFF1E102A),
-                    Color(0xFF2A0F26),
-                  ]
-                : const [
-                    Color(0xFFFFF1F2),
-                    Color(0xFFFDF2F8),
-                    Color(0xFFF3E8FF),
-                  ],
+            colors: AppTheme.pageGradientColors(context),
           ),
         ),
       ),

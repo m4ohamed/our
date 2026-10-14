@@ -58,7 +58,7 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
         elevation: 0,
         leading: IconButton(
           icon: Icon(

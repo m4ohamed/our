@@ -131,7 +131,7 @@ class _OurLoveStoryAppState extends ConsumerState<OurLoveStoryApp>
             HapticFeedback.mediumImpact();
             rootScaffoldMessengerKey.currentState?.showSnackBar(
               SnackBar(
-                backgroundColor: const Color(0xFFF43F5E),
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 duration: const Duration(seconds: 4),
                 content: Row(
                   children: [
@@ -145,7 +145,7 @@ class _OurLoveStoryAppState extends ConsumerState<OurLoveStoryApp>
                           Text(
                             title,
                             style: GoogleFonts.cairo(
-                              color: Colors.white,
+                              color: Theme.of(context).colorScheme.onPrimary,
                               fontWeight: FontWeight.w900,
                               fontSize: 13.5,
                             ),
@@ -154,7 +154,7 @@ class _OurLoveStoryAppState extends ConsumerState<OurLoveStoryApp>
                             Text(
                               message,
                               style: GoogleFonts.cairo(
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.onPrimary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 12,
                               ),

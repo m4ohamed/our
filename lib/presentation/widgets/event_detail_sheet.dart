@@ -277,17 +277,17 @@ class EventDetailSheet extends StatelessWidget {
         Expanded(
           child: OutlinedButton.icon(
             onPressed: onDelete,
-            icon: const Icon(
+            icon: Icon(
               Icons.delete_outline_rounded,
               size: 18,
-              color: Colors.redAccent,
+              color: Theme.of(context).colorScheme.error,
             ),
             label: Text(
               s.delete,
-              style: const TextStyle(color: Colors.redAccent),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.redAccent),
+              side: BorderSide(color: Theme.of(context).colorScheme.error),
               shape: const StadiumBorder(),
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),

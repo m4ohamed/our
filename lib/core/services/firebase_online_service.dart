@@ -4,8 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// خدمة تهيئة الاتصال السحابي المباشر (Firebase & Cloud Firestore)
-/// تدعم القراءة التلقائية من ملف google-services.json المضاف من المستخدم،
-/// كما توفر إعدادات اتصال احتياطية مدمجة لضمان عمل التطبيق أونلاين فوراً على جميع المنصات.
+/// متوافقة مع مشروع Firebase الخاص بك (our-love-story-2026) وملف google-services.json
 class FirebaseOnlineService {
   FirebaseOnlineService._();
 
@@ -15,12 +14,9 @@ class FirebaseOnlineService {
   static const String keyCustomMessagingSenderId = 'fb_custom_sender_id';
   static const String keyCustomStorageBucket = 'fb_custom_storage_bucket';
 
-  // إعدادات Firebase الاحتياطية المدمجة (تُستخدم تلقائياً على الويب أو في حال عدم وجود google-services.json)
+  // إعدادات مشروعك الرسمي المستخرجة من ملف google-services.json الخاص بك (our-love-story-2026)
   static const FirebaseOptions fallbackFirebaseOptions = FirebaseOptions(
     apiKey: 'AIzaSyAGIFsIe5FktSreMyQQ1tCp4gD9GktBXDQ',
-    authDomain: 'our-love-story-2026.firebaseapp.com',
-    databaseURL:
-        'https://our-love-story-2026-default-rtdb.europe-west1.firebasedatabase.app',
     projectId: 'our-love-story-2026',
     storageBucket: 'our-love-story-2026.firebasestorage.app',
     messagingSenderId: '160425672499',
@@ -29,7 +25,6 @@ class FirebaseOnlineService {
 
   /// تهيئة Firebase وإرجاع كائن Cloud Firestore نشط وجاهز للمزامنة الفورية
   static Future<FirebaseFirestore?> initialize(SharedPreferences prefs) async {
-    // 1. إذا أدخل المستخدم إعدادات مشروع مخصصة من داخل شاشة الإعدادات، نستخدمها أولاً
     final customProjectId = prefs.getString(keyCustomProjectId)?.trim() ?? '';
     final customApiKey = prefs.getString(keyCustomApiKey)?.trim() ?? '';
     final customAppId = prefs.getString(keyCustomAppId)?.trim() ?? '';
@@ -46,10 +41,10 @@ class FirebaseOnlineService {
               appId: customAppId,
               messagingSenderId:
                   prefs.getString(keyCustomMessagingSenderId)?.trim() ??
-                  '135452049816',
+                  '160425672499',
               storageBucket:
                   prefs.getString(keyCustomStorageBucket)?.trim() ??
-                  '$customProjectId.appspot.com',
+                  '$customProjectId.firebasestorage.app',
             ),
           );
         }
@@ -57,14 +52,14 @@ class FirebaseOnlineService {
       } catch (_) {}
     }
 
-    // 2. المحاولة القياسية عبر ملف google-services.json الموجود في android/app/
+    // المحاولة القياسية عبر ملف google-services.json الموجود في android/app/
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
       return _configureFirestore();
     } catch (_) {
-      // 3. في حال التشغيل على الويب/سطح المكتب أو قبل نسخ google-services.json، نفعّل الخيار الاحتياطي المدمج
+      // في حال التشغيل على الويب/سطح المكتب نستخدم إعدادات مشروع our-love-story-2026 المدمجة
       try {
         if (Firebase.apps.isEmpty) {
           await Firebase.initializeApp(options: fallbackFirebaseOptions);

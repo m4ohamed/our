@@ -1,4 +1,4 @@
-// lib/data/repositories/shared_prefs_settings_repository.dart
+// lib/data/repositories/settings_repository_impl.dart
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -39,6 +39,7 @@ class SharedPrefsSettingsRepository implements SettingsRepository {
         settings.biometricEnabled,
       ),
       _prefs.setString(AppConstants.keyLanguage, settings.language),
+      _prefs.setBool(AppConstants.keyEnableDemoData, settings.enableDemoData),
     ]);
     _streamController.add(settings);
   }
@@ -74,6 +75,7 @@ class SharedPrefsSettingsRepository implements SettingsRepository {
       biometricEnabled:
           _prefs.getBool(AppConstants.keyBiometricEnabled) ?? false,
       language: _prefs.getString(AppConstants.keyLanguage) ?? 'ar',
+      enableDemoData: _prefs.getBool(AppConstants.keyEnableDemoData) ?? true,
     );
   }
 

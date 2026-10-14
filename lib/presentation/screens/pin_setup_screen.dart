@@ -190,7 +190,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: d == '⌫'
-                            ? Colors.transparent
+                            ? Theme.of(context).colorScheme.surface.withValues(alpha: 0)
                             : Theme.of(
                                 context,
                               ).colorScheme.surfaceContainerHighest,
@@ -449,7 +449,7 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: (d == '⌫' || d == 'BIO')
-                                      ? Colors.transparent
+                                      ? Theme.of(context).colorScheme.surface.withValues(alpha: 0)
                                       : Theme.of(
                                           context,
                                         ).colorScheme.surfaceContainerHighest,

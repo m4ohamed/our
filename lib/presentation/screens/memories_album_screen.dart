@@ -58,11 +58,11 @@ class _MemoriesAlbumScreenState extends ConsumerState<MemoriesAlbumScreen> {
         onPressed: () => _showAddMemorySheet(s),
         backgroundColor: Theme.of(context).colorScheme.primary,
         elevation: 4,
-        icon: const Icon(Icons.add_a_photo_rounded, color: Colors.white),
+        icon: Icon(Icons.add_a_photo_rounded, color: Theme.of(context).colorScheme.onPrimary),
         label: Text(
           s.addMemory,
           style: GoogleFonts.manrope(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onPrimary,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -79,7 +79,7 @@ class _MemoriesAlbumScreenState extends ConsumerState<MemoriesAlbumScreen> {
           color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new, size: 20),
@@ -316,9 +316,9 @@ class _MemoriesAlbumScreenState extends ConsumerState<MemoriesAlbumScreen> {
                         .toggleFeatured(item.id),
                   ),
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.delete_outline_rounded,
-                      color: Colors.redAccent,
+                      color: Theme.of(context).colorScheme.error,
                     ),
                     onPressed: () => _confirmDeleteMedia(item, s),
                   ),
@@ -432,7 +432,7 @@ class _MemoriesAlbumScreenState extends ConsumerState<MemoriesAlbumScreen> {
               Navigator.pop(context);
               await ref.read(mediaProvider.notifier).deleteMedia(item.id);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             child: Text(s.delete),
           ),
         ],
@@ -444,7 +444,7 @@ class _MemoriesAlbumScreenState extends ConsumerState<MemoriesAlbumScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
       builder: (_) => _AddMemorySheet(
         onSave: (media) async {
           await ref.read(mediaProvider.notifier).addMedia(media);
@@ -631,11 +631,11 @@ class _AddMemorySheetState extends State<_AddMemorySheet> {
                       right: 8,
                       child: IconButton.filled(
                         style: IconButton.styleFrom(
-                          backgroundColor: Colors.black54,
+                          backgroundColor: theme.colorScheme.scrim.withValues(alpha: 0.54),
                         ),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.close_rounded,
-                          color: Colors.white,
+                          color: theme.colorScheme.onPrimary,
                           size: 18,
                         ),
                         onPressed: () => setState(() => _localPath = null),
@@ -724,7 +724,7 @@ class _AddMemorySheetState extends State<_AddMemorySheet> {
                           dimension: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : Text(s.addMemory),
@@ -814,11 +814,11 @@ class _MediaCard extends StatelessWidget {
                     if (media.mediaType == MediaType.video)
                       Positioned.fill(
                         child: Container(
-                          color: Colors.black26,
-                          child: const Center(
+                          color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.26),
+                          child: Center(
                             child: Icon(
                               Icons.play_circle_fill_rounded,
-                              color: Colors.white,
+                              color: Theme.of(context).colorScheme.onPrimary,
                               size: 42,
                             ),
                           ),
@@ -834,14 +834,14 @@ class _MediaCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: media.isFeatured
                                 ? Theme.of(context).colorScheme.secondary
-                                : Colors.black38,
+                                : Theme.of(context).colorScheme.scrim.withValues(alpha: 0.38),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             media.isFeatured
                                 ? Icons.star_rounded
                                 : Icons.star_border_rounded,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                             size: 16,
                           ),
                         ),
@@ -934,23 +934,23 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
   @override
   Widget build(BuildContext context) {
     if (_items.isEmpty) {
-      return const Scaffold(backgroundColor: Colors.black);
+      return Scaffold(backgroundColor: Theme.of(context).colorScheme.scrim);
     }
     final current = _items[_currentIndex];
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).colorScheme.scrim,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+          icon: Icon(Icons.close_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 28),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           '${_currentIndex + 1} / ${_items.length}',
-          style: GoogleFonts.manrope(color: Colors.white, fontSize: 16),
+          style: GoogleFonts.manrope(color: Theme.of(context).colorScheme.onPrimary, fontSize: 16),
         ),
         actions: [
           IconButton(
@@ -958,7 +958,7 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
               current.isFeatured
                   ? Icons.star_rounded
                   : Icons.star_border_rounded,
-              color: current.isFeatured ? Colors.amber : Colors.white,
+              color: current.isFeatured ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.onPrimary,
             ),
             onPressed: () async {
               await ref.read(mediaProvider.notifier).toggleFeatured(current.id);
@@ -970,9 +970,9 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
             },
           ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.delete_outline_rounded,
-              color: Colors.redAccent,
+              color: Theme.of(context).colorScheme.error,
             ),
             onPressed: () async {
               await ref.read(mediaProvider.notifier).deleteMedia(current.id);
@@ -990,7 +990,7 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
           IconButton(
             icon: Icon(
               _showInfo ? Icons.info_rounded : Icons.info_outline_rounded,
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onPrimary,
             ),
             onPressed: () => setState(() => _showInfo = !_showInfo),
           ),
@@ -1033,8 +1033,8 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
                         begin: Alignment.bottomCenter,
                         end: Alignment.topCenter,
                         colors: [
-                          Colors.black.withValues(alpha: 0.8),
-                          Colors.transparent,
+                          Theme.of(context).colorScheme.scrim.withValues(alpha: 0.8),
+                          Theme.of(context).colorScheme.surface.withValues(alpha: 0),
                         ],
                       ),
                     ),
@@ -1045,7 +1045,7 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
                         Text(
                           current.description ?? widget.s.beautifulMemory,
                           style: GoogleFonts.notoSerif(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1062,7 +1062,7 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
                             Text(
                               '${current.uploadDate.day}/${current.uploadDate.month}/${current.uploadDate.year}',
                               style: GoogleFonts.manrope(
-                                color: Colors.white70,
+                                color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7),
                                 fontSize: 13,
                               ),
                             ),
@@ -1078,7 +1078,7 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
                                 child: Text(
                                   current.location!,
                                   style: GoogleFonts.manrope(
-                                    color: Colors.white70,
+                                    color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7),
                                     fontSize: 13,
                                   ),
                                 ),
