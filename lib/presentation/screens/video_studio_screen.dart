@@ -2228,17 +2228,23 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
           style: GoogleFonts.notoSerif(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        for (final track in audioTracks)
-          // ignore: deprecated_member_use
-          RadioListTile<String>(
-            contentPadding: EdgeInsets.zero,
-            title: Text(track.$2, style: GoogleFonts.manrope(fontSize: 13)),
-            value: track.$1,
-            groupValue: _project.audioAsset,
-            onChanged: (val) {
-              _commitProjectChange(_project.copyWith(audioAsset: val));
-            },
+        RadioGroup<String>(
+          groupValue: _project.audioAsset,
+          onChanged: (val) {
+            _commitProjectChange(_project.copyWith(audioAsset: val));
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final track in audioTracks)
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(track.$2, style: GoogleFonts.manrope(fontSize: 13)),
+                  value: track.$1,
+                ),
+            ],
           ),
+        ),
       ],
     );
   }
