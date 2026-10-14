@@ -34,3 +34,21 @@
 - **تحسين سلامة الأنواع (Type Safety) وفحص `mounted`:**
   - تحديد النوع الصريح `TimelineEventEntity milestone` بدلاً من `dynamic` وحذف المتغير المحلي غير المستخدم `isDark` في `lib/presentation/screens/home_screen.dart`.
   - إضافة فحوصات `mounted` و `context.mounted` بعد العمليات غير المتزامنة (`await`) وتوحيد الشروط الثلاثية في `couples_night_screen.dart` و `settings_screen.dart` و `event_form_sheet.dart`.
+
+### د. إصلاح انهيار التطبيق الفوري عند التشغيل (MainActivity Package Namespace & Biometrics Crash)
+* **الخطأ (The Bug)**:
+  إغلاق التطبيق فور فتحه وظهور رسالة النظام: `"our_love_story closed because this app has a bug"` مع رمي استثناء `ClassNotFoundException` لعدم العثور على `MainActivity`.
+* **السبب الجذري (Root Cause)**:
+  1. تم تعيين `namespace` في `android/app/build.gradle.kts` ليكون `com.our.loveStory` لمطابقة حزمة Firebase في `google-services.json`، بينما كان ملف `MainActivity.kt` موجوداً في المسار القديم `android/app/src/main/kotlin/com/example/our_love_story/MainActivity.kt` بحزمة `package com.example.our_love_story`.
+  2. كان كلاس `MainActivity` يرث من `FlutterActivity`، بينما يتطلب استخدام مكتبة البصمة `local_auth` في `pin_setup_screen.dart` أن يرث من `FlutterFragmentActivity`.
+* **الحل الفعلي (The Fix)**:
+  1. إنشاء المسار المتطابق مع الحزمة الجديدة: `android/app/src/main/kotlin/com/our/loveStory/MainActivity.kt`.
+  2. ضبط الحزمة الصحيحة ووراثة `FlutterFragmentActivity`:
+  ```kotlin
+  package com.our.loveStory
+
+  import io.flutter.embedding.android.FlutterFragmentActivity
+
+  class MainActivity : FlutterFragmentActivity()
+  ```
+  3. حذف المجلد القديم `android/app/src/main/kotlin/com/example`.

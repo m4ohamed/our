@@ -21,6 +21,10 @@
   - تم تسجيل تطبيق Android بحزمة `com.our.loveStory` واستخراج ملف `google-services.json` الأصلي وحفظه في مسار التطبيق الرئيسي `android/app/google-services.json`.
   - تم تحديث بيانات الاتصال الاحتياطية المدمجة في `FirebaseOnlineService.fallbackFirebaseOptions` لتعمل على المشروع الجديد مباشرة.
   - تم ربط إعدادات المشروع عبر `.firebaserc` و `firebase.json` و `firestore.rules`.
+- **إصلاح انهيار إقلاع التطبيق (Fix App Launch Crash & Biometrics Support):**
+  - نقل وتحديث كلاس `MainActivity` إلى المسار والحزمة الرسمية `com.our.loveStory` في `android/app/src/main/kotlin/com/our/loveStory/MainActivity.kt`.
+  - ترقية وراثة الكلاس إلى `FlutterFragmentActivity` لضمان توافق مكتبة المقاييس الحيوية والبصمة `local_auth` وعدم تعطل شاشة القفل.
+  - تنظيف وحذف مجلد الحزمة الافتراضية القديمة `android/app/src/main/kotlin/com/example`.
 
 ---
 
