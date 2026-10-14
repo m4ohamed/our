@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "160425672499",
+    "project_id": "our-love-story-2026",
+    "storage_bucket": "our-love-story-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:160425672499:android:9e47e5aac6bdba5f0e0846",
+        "android_client_info": {
+          "package_name": "com.our.loveStory"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGIFsIe5FktSreMyQQ1tCp4gD9GktBXDQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

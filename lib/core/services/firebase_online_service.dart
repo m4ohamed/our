@@ -17,15 +17,14 @@ class FirebaseOnlineService {
 
   // إعدادات Firebase الاحتياطية المدمجة (تُستخدم تلقائياً على الويب أو في حال عدم وجود google-services.json)
   static const FirebaseOptions fallbackFirebaseOptions = FirebaseOptions(
-    apiKey: 'AIzaSyDZ3eHUwVZnQHEEd7L14ANz6Mvn7Bb_Ajw',
-    authDomain: 'storm1-78acf.firebaseapp.com',
+    apiKey: 'AIzaSyAGIFsIe5FktSreMyQQ1tCp4gD9GktBXDQ',
+    authDomain: 'our-love-story-2026.firebaseapp.com',
     databaseURL:
-        'https://storm1-78acf-default-rtdb.europe-west1.firebasedatabase.app',
-    projectId: 'storm1-78acf',
-    storageBucket: 'storm1-78acf.firebasestorage.app',
-    messagingSenderId: '135452049816',
-    appId: '1:135452049816:web:86eb398a87b54174fa6bed',
-    measurementId: 'G-SJ2ZGTNVFQ',
+        'https://our-love-story-2026-default-rtdb.europe-west1.firebasedatabase.app',
+    projectId: 'our-love-story-2026',
+    storageBucket: 'our-love-story-2026.firebasestorage.app',
+    messagingSenderId: '160425672499',
+    appId: '1:160425672499:android:9e47e5aac6bdba5f0e0846',
   );
 
   /// تهيئة Firebase وإرجاع كائن Cloud Firestore نشط وجاهز للمزامنة الفورية
