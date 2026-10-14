@@ -44,6 +44,10 @@ class MessageLookup extends MessageLookupByLibrary {
 
   static String m10(name) => "With all my love, ${name}";
 
+  static String m11(seconds) => "Too many attempts, wait ${seconds}s";
+
+  static String m12(name) => "Welcome ${name}! 🎉";
+
   final messages = _notInlinedMessages(_notInlinedMessages);
   static Map<String, Function> _notInlinedMessages(_) => <String, Function>{
     "aboutApp": MessageLookupByLibrary.simpleMessage("About App"),
@@ -263,6 +267,29 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "winter": MessageLookupByLibrary.simpleMessage("Winter"),
     "withLove": m10,
+    "pregnancy": MessageLookupByLibrary.simpleMessage("Pregnancy"),
+    "biometricUnlock": MessageLookupByLibrary.simpleMessage("Biometric Unlock"),
+    "biometricSubtitle": MessageLookupByLibrary.simpleMessage("Use fingerprint or face"),
+    "biometricReason": MessageLookupByLibrary.simpleMessage("Please authenticate to unlock Our Love Story"),
+    "chooseImageSource": MessageLookupByLibrary.simpleMessage("Choose Image Source"),
+    "camera": MessageLookupByLibrary.simpleMessage("Camera"),
+    "gallery": MessageLookupByLibrary.simpleMessage("Photo Gallery"),
+    "imageUrlOptional": MessageLookupByLibrary.simpleMessage("Image URL (Optional)"),
+    "pickImageFromDevice": MessageLookupByLibrary.simpleMessage("Pick Image from Device"),
+    "removeImage": MessageLookupByLibrary.simpleMessage("Remove Image"),
+    "markAsFeatured": MessageLookupByLibrary.simpleMessage("Mark as Featured"),
+    "savedMessages": MessageLookupByLibrary.simpleMessage("Saved in My Heart"),
+    "addSecretMessage": MessageLookupByLibrary.simpleMessage("Add Secret Message"),
+    "writeSecretMessage": MessageLookupByLibrary.simpleMessage("Write a secret love message..."),
+    "messageSavedInHeart": MessageLookupByLibrary.simpleMessage("Message saved in your heart ❤️"),
+    "noSavedMessagesYet": MessageLookupByLibrary.simpleMessage("No saved messages yet"),
+    "sortNewestFirst": MessageLookupByLibrary.simpleMessage("Newest First"),
+    "sortOldestFirst": MessageLookupByLibrary.simpleMessage("Oldest First"),
+    "upcomingAnniversary": MessageLookupByLibrary.simpleMessage("Upcoming Milestone"),
+    "tagsOptional": MessageLookupByLibrary.simpleMessage("Tags (comma-separated)"),
+    "save": MessageLookupByLibrary.simpleMessage("Save"),
+    "tooManyAttempts": m11,
+    "welcomeBaby": m12,
     "writeDetails": MessageLookupByLibrary.simpleMessage(
       "Write details of this memory...",
     ),

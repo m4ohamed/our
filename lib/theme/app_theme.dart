@@ -5,29 +5,31 @@ import 'package:google_fonts/google_fonts.dart';
 class AppColors {
   AppColors._();
 
-  // Light — Ethereal Romance
-  static const Color pearlWhite = Color(0xFFFDFCFB);
-  static const Color dustyRose = Color(0xFFF1878E);
-  static const Color champagneGold = Color(0xFFE1B162);
-  static const Color surfaceRose = Color(0xFFFCEFEF);
-  static const Color deepMauve = Color(0xFF7D5C7E);
-  static const Color darkText = Color(0xFF331012);
-  static const Color lightText = Color(0xFF663A3B);
-  static const Color softTaupe = Color(0xFFA68E8E);
+  // Light — Rose & Amethyst Romance (متناسق مع ثنائي المحبة V2.0)
+  static const Color pearlWhite = Color(0xFFFFF7F9);
+  static const Color dustyRose = Color(0xFFF43F5E);
+  static const Color champagneGold = Color(0xFFF59E0B);
+  static const Color surfaceRose = Color(0xFFFDF2F8);
+  static const Color deepMauve = Color(0xFF9333EA);
+  static const Color darkText = Color(0xFF1F2937);
+  static const Color lightText = Color(0xFF6B7280);
+  static const Color softTaupe = Color(0xFF9CA3AF);
   static const Color white = Color(0xFFFFFFFF);
 
-  // Dark — Midnight Romance
-  static const Color darkBg = Color(0xFF1A0A0B);
-  static const Color darkSurface = Color(0xFF2A1215);
-  static const Color darkCard = Color(0xFF3D1A1E);
-  static const Color darkText2 = Color(0xFFF5E6E8);
-  static const Color darkLightText = Color(0xFFD4A0A5);
+  // Dark — Velvet Night Mode (وضع السهرة الليلي الدافئ)
+  static const Color darkBg = Color(0xFF13091C);
+  static const Color darkSurface = Color(0xFF1E102A);
+  static const Color darkCard = Color(0xFF2D193F);
+  static const Color darkRoseAccent = Color(0xFFFB7185);
+  static const Color darkPurpleAccent = Color(0xFFC084FC);
+  static const Color darkText2 = Color(0xFFFDF2F8);
+  static const Color darkLightText = Color(0xFFCBD5E1);
 
   // Semantic Colors
-  static const Color error = Color(0xFFE57373);
-  static const Color success = Color(0xFF81C784);
-  static const Color warning = Color(0xFFFFB74D);
-  static const Color shadow = Color(0x42000000); // black26
+  static const Color error = Color(0xFFEF4444);
+  static const Color success = Color(0xFF10B981);
+  static const Color warning = Color(0xFFF59E0B);
+  static const Color shadow = Color(0x26F43F5E);
 
   // Legacy aliases for backward compatibility
   static const Color primaryPink = dustyRose;
@@ -42,9 +44,7 @@ class AppTheme {
   static ThemeData get lightTheme => ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.dustyRose,
-      brightness: Brightness.light,
+    colorScheme: const ColorScheme.light(
       surface: AppColors.pearlWhite,
       onSurface: AppColors.darkText,
       surfaceContainerHighest: AppColors.surfaceRose,
@@ -54,7 +54,8 @@ class AppTheme {
       onSecondary: AppColors.white,
       tertiary: AppColors.deepMauve,
       onTertiary: AppColors.white,
-      outline: AppColors.softTaupe,
+      outline: AppColors.lightText,
+      error: AppColors.error,
     ),
     scaffoldBackgroundColor: AppColors.pearlWhite,
     appBarTheme: AppBarTheme(
@@ -62,46 +63,61 @@ class AppTheme {
       foregroundColor: AppColors.darkText,
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: GoogleFonts.notoSerif(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
+      titleTextStyle: GoogleFonts.cairo(
+        fontSize: 20,
+        fontWeight: FontWeight.w900,
         color: AppColors.darkText,
       ),
     ),
-    textTheme: _buildTextTheme(AppColors.darkText, AppColors.lightText),
-    elevatedButtonTheme: _elevatedButtonTheme,
+    textTheme: _buildTextTheme(
+      AppColors.darkText,
+      AppColors.lightText,
+      AppColors.dustyRose,
+    ),
+    elevatedButtonTheme: _elevatedButtonTheme(AppColors.dustyRose),
     cardTheme: CardThemeData(
       elevation: 0,
-      color: AppColors.white.withValues(alpha: 0.7),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      color: AppColors.white.withValues(alpha: 0.92),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(color: AppColors.dustyRose.withValues(alpha: 0.18)),
+      ),
     ),
-    inputDecorationTheme: _inputDecorationTheme(AppColors.dustyRose),
+    inputDecorationTheme: _inputDecorationTheme(
+      accent: AppColors.dustyRose,
+      fillColor: AppColors.surfaceRose,
+      textColor: AppColors.darkText,
+    ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      backgroundColor: AppColors.darkText,
+      contentTextStyle: GoogleFonts.cairo(
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     iconTheme: const IconThemeData(color: AppColors.dustyRose),
     dividerTheme: DividerThemeData(
-      color: AppColors.softTaupe.withValues(alpha: 0.2),
+      color: AppColors.dustyRose.withValues(alpha: 0.14),
     ),
   );
 
   static ThemeData get darkTheme => ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.dustyRose,
-      brightness: Brightness.dark,
+    colorScheme: const ColorScheme.dark(
       surface: AppColors.darkBg,
       onSurface: AppColors.darkText2,
       surfaceContainerHighest: AppColors.darkSurface,
-      primary: AppColors.dustyRose,
+      primary: AppColors.darkRoseAccent,
       onPrimary: AppColors.white,
       secondary: AppColors.champagneGold,
       onSecondary: AppColors.white,
-      tertiary: AppColors.deepMauve,
+      tertiary: AppColors.darkPurpleAccent,
       onTertiary: AppColors.white,
       outline: AppColors.darkLightText,
+      error: AppColors.error,
     ),
     scaffoldBackgroundColor: AppColors.darkBg,
     appBarTheme: AppBarTheme(
@@ -109,96 +125,141 @@ class AppTheme {
       foregroundColor: AppColors.darkText2,
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: GoogleFonts.notoSerif(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
+      titleTextStyle: GoogleFonts.cairo(
+        fontSize: 20,
+        fontWeight: FontWeight.w900,
         color: AppColors.darkText2,
       ),
     ),
-    textTheme: _buildTextTheme(AppColors.darkText2, AppColors.darkLightText),
-    elevatedButtonTheme: _elevatedButtonTheme,
+    textTheme: _buildTextTheme(
+      AppColors.darkText2,
+      AppColors.darkLightText,
+      AppColors.darkRoseAccent,
+    ),
+    elevatedButtonTheme: _elevatedButtonTheme(AppColors.dustyRose),
     cardTheme: CardThemeData(
       elevation: 0,
-      color: AppColors.darkCard.withValues(alpha: 0.8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      color: AppColors.darkCard.withValues(alpha: 0.92),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(
+          color: AppColors.darkRoseAccent.withValues(alpha: 0.28),
+        ),
+      ),
     ),
-    inputDecorationTheme: _inputDecorationTheme(AppColors.dustyRose),
+    inputDecorationTheme: _inputDecorationTheme(
+      accent: AppColors.darkRoseAccent,
+      fillColor: AppColors.darkSurface,
+      textColor: AppColors.darkText2,
+    ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      backgroundColor: AppColors.darkCard,
+      contentTextStyle: GoogleFonts.cairo(
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
-    iconTheme: const IconThemeData(color: AppColors.dustyRose),
+    iconTheme: const IconThemeData(color: AppColors.darkRoseAccent),
     dividerTheme: DividerThemeData(
-      color: AppColors.darkLightText.withValues(alpha: 0.2),
+      color: AppColors.darkRoseAccent.withValues(alpha: 0.2),
     ),
   );
 
-  static TextTheme _buildTextTheme(Color primary, Color secondary) => TextTheme(
-    displayLarge: GoogleFonts.dancingScript(
-      fontSize: 48,
-      fontWeight: FontWeight.bold,
-      color: AppColors.dustyRose,
+  static TextTheme _buildTextTheme(
+    Color primary,
+    Color secondary,
+    Color accent,
+  ) => TextTheme(
+    displayLarge: GoogleFonts.cairo(
+      fontSize: 40,
+      fontWeight: FontWeight.w900,
+      color: accent,
     ),
-    headlineLarge: GoogleFonts.notoSerif(
-      fontSize: 32,
-      fontWeight: FontWeight.bold,
+    headlineLarge: GoogleFonts.cairo(
+      fontSize: 28,
+      fontWeight: FontWeight.w900,
       color: primary,
     ),
-    headlineMedium: GoogleFonts.notoSerif(
-      fontSize: 24,
+    headlineMedium: GoogleFonts.cairo(
+      fontSize: 22,
+      fontWeight: FontWeight.w800,
+      color: primary,
+    ),
+    titleLarge: GoogleFonts.cairo(
+      fontSize: 18,
+      fontWeight: FontWeight.w800,
+      color: primary,
+    ),
+    bodyLarge: GoogleFonts.cairo(
+      fontSize: 15.5,
       fontWeight: FontWeight.w600,
       color: primary,
     ),
-    bodyLarge: GoogleFonts.manrope(
-      fontSize: 16,
-      color: primary,
-      letterSpacing: 0.2,
+    bodyMedium: GoogleFonts.cairo(
+      fontSize: 13.5,
+      fontWeight: FontWeight.w600,
+      color: secondary,
     ),
-    bodyMedium: GoogleFonts.manrope(fontSize: 14, color: secondary),
-    bodySmall: GoogleFonts.manrope(fontSize: 12, color: secondary),
-    labelLarge: GoogleFonts.manrope(
+    bodySmall: GoogleFonts.cairo(
       fontSize: 12,
-      fontWeight: FontWeight.bold,
-      letterSpacing: 1.2,
-      color: AppColors.dustyRose,
+      fontWeight: FontWeight.w600,
+      color: secondary,
+    ),
+    labelLarge: GoogleFonts.cairo(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w800,
+      color: accent,
     ),
   );
 
-  static ElevatedButtonThemeData get _elevatedButtonTheme =>
+  static ElevatedButtonThemeData _elevatedButtonTheme(Color accent) =>
       ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.dustyRose,
+          backgroundColor: accent,
           foregroundColor: AppColors.white,
-          elevation: 0,
-          shape: const StadiumBorder(),
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          textStyle: GoogleFonts.manrope(
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
+          elevation: 2,
+          shadowColor: accent.withValues(alpha: 0.35),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+          textStyle: GoogleFonts.cairo(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
           ),
         ),
       );
 
-  static InputDecorationTheme _inputDecorationTheme(Color accent) =>
-      InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.5),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: accent.withValues(alpha: 0.2),
-            width: 1,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: accent, width: 1.5),
-        ),
-        labelStyle: TextStyle(color: accent),
-        prefixIconColor: accent,
-      );
+  static InputDecorationTheme _inputDecorationTheme({
+    required Color accent,
+    required Color fillColor,
+    required Color textColor,
+  }) => InputDecorationTheme(
+    filled: true,
+    fillColor: fillColor,
+    hintStyle: GoogleFonts.cairo(
+      color: textColor.withValues(alpha: 0.55),
+      fontSize: 13,
+    ),
+    labelStyle: GoogleFonts.cairo(
+      color: accent,
+      fontWeight: FontWeight.w700,
+      fontSize: 13,
+    ),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(color: accent.withValues(alpha: 0.22)),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(color: accent.withValues(alpha: 0.25), width: 1.2),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(color: accent, width: 1.8),
+    ),
+    prefixIconColor: accent,
+  );
 }

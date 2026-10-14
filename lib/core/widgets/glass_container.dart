@@ -13,15 +13,23 @@ class GlassContainer extends StatelessWidget {
   const GlassContainer({
     super.key,
     required this.child,
-    this.borderRadius = 20,
-    this.blur = 15,
+    this.borderRadius = 22,
+    this.blur = 14,
     this.color,
-    this.borderOpacity = 0.2,
+    this.borderOpacity = 0.24,
     this.padding,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final defaultSurface = isDark
+        ? const Color(0xFF2D193F).withValues(alpha: 0.88)
+        : Colors.white.withValues(alpha: 0.90);
+    final borderColor = isDark
+        ? const Color(0xFFFB7185).withValues(alpha: borderOpacity)
+        : const Color(0xFFF43F5E).withValues(alpha: borderOpacity);
+
     return RepaintBoundary(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
@@ -30,14 +38,20 @@ class GlassContainer extends StatelessWidget {
           child: Container(
             padding: padding,
             decoration: BoxDecoration(
-              color: (color ?? Theme.of(context).colorScheme.surface)
-                  .withValues(alpha: 0.1),
+              color: color != null
+                  ? color!.withValues(alpha: 0.88)
+                  : defaultSurface,
               borderRadius: BorderRadius.circular(borderRadius),
-              border: Border.all(
-                color: (color ?? Theme.of(context).colorScheme.surface)
-                    .withValues(alpha: borderOpacity),
-                width: 1.5,
-              ),
+              border: Border.all(color: borderColor, width: 1.4),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.35)
+                      : const Color(0xFFF43F5E).withValues(alpha: 0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
             child: child,
           ),

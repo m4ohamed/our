@@ -1,7 +1,7 @@
 name: our_love_story
-description: "Our Love Story - A beautiful memories app"
+description: "Our Love Story V2.0 - Cloud Firestore, Cloudinary, OneSignal Push Notifications, Couples Game Night & Rust Keyframe Video Studio"
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: ^3.11.4
@@ -21,16 +21,23 @@ dependencies:
   flutter_riverpod: ^3.0.0-dev.3
   riverpod_annotation: ^3.0.0-dev.3
 
-  # Local Storage
+  # Cloud Backend (Firestore + Cloudinary HTTP Upload + OneSignal Push Notifications)
+  firebase_core: ^3.12.1
+  cloud_firestore: ^5.6.5
+  onesignal_flutter: ^5.2.9
+  http: ^1.3.0
+
+  # Local Storage (Offline Cache)
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   shared_preferences: ^2.3.3
 
-  # Media
+  # Media & Video Playback
   cached_network_image: ^3.4.1
   image_picker: ^1.2.1
   photo_view: ^0.15.0
   audioplayers: ^6.6.0
+  video_player: ^2.9.3
 
   # UI Components
   timeline_tile: ^2.0.0

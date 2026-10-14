@@ -1,10 +1,12 @@
 // lib/presentation/screens/pin_setup_screen.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:local_auth/local_auth.dart';
 import '../../generated/l10n.dart';
 
 import '../providers/app_providers.dart';
@@ -240,12 +242,74 @@ class PinVerifyScreen extends ConsumerStatefulWidget {
 }
 
 class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
+  final _localAuth = LocalAuthentication();
   String _pin = '';
   String? _error;
   int _attempts = 0;
+  int _lockoutSeconds = 0;
+  Timer? _lockoutTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tryBiometricIfEnabled();
+    });
+  }
+
+  @override
+  void dispose() {
+    _lockoutTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _tryBiometricIfEnabled() async {
+    final settings = ref.read(settingsProvider).value;
+    if (settings == null || !settings.biometricEnabled) return;
+    await _authenticateWithBiometrics();
+  }
+
+  Future<void> _authenticateWithBiometrics() async {
+    if (_lockoutSeconds > 0) return;
+    final s = S.of(context);
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isSupported = await _localAuth.isDeviceSupported();
+      if (!canCheck && !isSupported) return;
+
+      final authenticated = await _localAuth.authenticate(
+        localizedReason: s.biometricReason,
+      );
+      if (authenticated && mounted) {
+        widget.onVerified();
+      }
+    } catch (_) {}
+  }
+
+  void _startLockout() {
+    _lockoutTimer?.cancel();
+    setState(() {
+      _lockoutSeconds = 30;
+      _pin = '';
+    });
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _lockoutSeconds--;
+        if (_lockoutSeconds <= 0) {
+          _attempts = 0;
+          _error = null;
+          timer.cancel();
+        }
+      });
+    });
+  }
 
   void _onDigit(String d) {
-    if (_pin.length >= 4) return;
+    if (_lockoutSeconds > 0 || _pin.length >= 4) return;
     setState(() {
       _pin += d;
       _error = null;
@@ -254,7 +318,7 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
   }
 
   void _onDelete() {
-    if (_pin.isEmpty) return;
+    if (_lockoutSeconds > 0 || _pin.isEmpty) return;
     setState(() {
       _pin = _pin.substring(0, _pin.length - 1);
       _error = null;
@@ -273,16 +337,25 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
       widget.onVerified();
     } else {
       _attempts++;
-      setState(() {
-        _error = s.incorrectPin(3 - _attempts);
-        _pin = '';
-      });
+      if (_attempts >= 3) {
+        _startLockout();
+      } else {
+        setState(() {
+          _error = s.incorrectPin(3 - _attempts);
+          _pin = '';
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
+    final settings = ref.watch(settingsProvider).value;
+    final biometricEnabled = settings?.biometricEnabled ?? false;
+    final displayError = _lockoutSeconds > 0
+        ? s.tooManyAttempts(_lockoutSeconds)
+        : _error;
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -303,11 +376,13 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              if (_error != null)
+              if (displayError != null)
                 Text(
-                  _error!,
+                  displayError,
+                  textAlign: TextAlign.center,
                   style: GoogleFonts.manrope(
                     color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w600,
                   ),
                 ).animate().shake(),
               const SizedBox(height: 32),
@@ -343,7 +418,7 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
                     ['1', '2', '3'],
                     ['4', '5', '6'],
                     ['7', '8', '9'],
-                    ['', '0', '⌫'],
+                    [biometricEnabled ? 'BIO' : '', '0', '⌫'],
                   ])
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -351,19 +426,29 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: row.map((d) {
                           if (d.isEmpty) {
-                            return const SizedBox(width: 72, height: 56);
+                            return const SizedBox(width: 80, height: 56);
                           }
                           return Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: InkWell(
                               borderRadius: BorderRadius.circular(36),
-                              onTap: () => d == '⌫' ? _onDelete() : _onDigit(d),
+                              onTap: _lockoutSeconds > 0
+                                  ? null
+                                  : () {
+                                      if (d == '⌫') {
+                                        _onDelete();
+                                      } else if (d == 'BIO') {
+                                        _authenticateWithBiometrics();
+                                      } else {
+                                        _onDigit(d);
+                                      }
+                                    },
                               child: Container(
                                 width: 56,
                                 height: 56,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: d == '⌫'
+                                  color: (d == '⌫' || d == 'BIO')
                                       ? Colors.transparent
                                       : Theme.of(
                                           context,
@@ -377,6 +462,14 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
                                             context,
                                           ).colorScheme.primary,
                                           size: 20,
+                                        )
+                                      : d == 'BIO'
+                                      ? Icon(
+                                          Icons.fingerprint_rounded,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                          size: 28,
                                         )
                                       : Text(
                                           d,

@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/widgets/glass_container.dart';
 import '../../generated/l10n.dart';
+import '../providers/app_providers.dart';
 
 final _tickProvider = StreamProvider<DateTime>((ref) {
   return Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now());
@@ -19,6 +20,7 @@ class BabyCountdownScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(_tickProvider);
+    final animationsEnabled = ref.watch(isAnimationsEnabledProvider);
     final s = S.of(context);
     final theme = Theme.of(context);
 
@@ -44,11 +46,9 @@ class BabyCountdownScreen extends ConsumerWidget {
       ),
       body: Stack(
         children: [
-          // Background with soft baby blue colors
           const _BabyArrivalBackground(),
 
-          // Decorative Elements (Clouds/Stars)
-          const _CloudDecoration(),
+          if (animationsEnabled) const _CloudDecoration(),
 
           SafeArea(
             child: Center(
@@ -57,12 +57,10 @@ class BabyCountdownScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Baby Icon / Illustration Area
-                    _buildBabyIllustration(context),
+                    _buildBabyIllustration(context, animationsEnabled),
 
                     const SizedBox(height: 40),
 
-                    // Title
                     Text(
                           s.babyArrivalTitle,
                           style: GoogleFonts.notoSerif(
@@ -99,7 +97,6 @@ class BabyCountdownScreen extends ConsumerWidget {
 
                     const SizedBox(height: 60),
 
-                    // Specific Baby Name Badge
                     _buildNameBadge(context, AppConstants.babyName),
                   ],
                 ),
@@ -111,19 +108,23 @@ class BabyCountdownScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBabyIllustration(BuildContext context) {
-    return Container(
-          padding: const EdgeInsets.all(40),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.child_care_rounded,
-            size: 80,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        )
+  Widget _buildBabyIllustration(BuildContext context, bool animationsEnabled) {
+    final container = Container(
+      padding: const EdgeInsets.all(40),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        Icons.child_care_rounded,
+        size: 80,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+    );
+
+    if (!animationsEnabled) return container;
+
+    return container
         .animate(onPlay: (c) => c.repeat(reverse: true))
         .scale(
           begin: const Offset(1, 1),
@@ -171,22 +172,41 @@ class BabyCountdownScreen extends ConsumerWidget {
   }
 
   Widget _buildArrivalMessage(BuildContext context, S s) {
-    return Column(
-      children: [
-        Icon(
-          Icons.celebration_rounded,
-          size: 48,
-          color: Theme.of(context).colorScheme.primary,
-        ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
-        const SizedBox(height: 16),
-        Text(
-          "Welcome Moaz!", // Fallback if no specific localized arrival string yet
-          style: GoogleFonts.notoSerif(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
+    final daysSinceBirth = DateTime.now()
+        .difference(AppConstants.babyExpectedDate)
+        .inDays;
+    return GlassContainer(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        children: [
+          Icon(
+            Icons.celebration_rounded,
+            size: 48,
+            color: Theme.of(context).colorScheme.primary,
+          ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
+          const SizedBox(height: 16),
+          Text(
+            s.welcomeBaby(AppConstants.babyName),
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSerif(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
-        ),
-      ],
+          if (daysSinceBirth > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              s.daysAgo(daysSinceBirth),
+              style: GoogleFonts.manrope(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -289,8 +309,8 @@ class _BabyArrivalBackground extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: isLight
                 ? [
-                    const Color(0xFFE3F2FD), // Very light blue
-                    const Color(0xFFF3E5F5), // Light lavender
+                    const Color(0xFFE3F2FD),
+                    const Color(0xFFF3E5F5),
                     theme.colorScheme.surface,
                   ]
                 : [
@@ -298,9 +318,7 @@ class _BabyArrivalBackground extends StatelessWidget {
                     theme.colorScheme.surfaceContainerHighest.withValues(
                       alpha: 0.5,
                     ),
-                    const Color(
-                      0xFF1A237E,
-                    ).withValues(alpha: 0.1), // Deep blue tint
+                    const Color(0xFF1A237E).withValues(alpha: 0.1),
                   ],
           ),
         ),

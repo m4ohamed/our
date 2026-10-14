@@ -569,5 +569,42 @@
                 "type": "String"
             }
         }
+    },
+    "pregnancy": "Pregnancy",
+    "biometricUnlock": "Biometric Unlock",
+    "biometricSubtitle": "Use fingerprint or face",
+    "biometricReason": "Please authenticate to unlock Our Love Story",
+    "chooseImageSource": "Choose Image Source",
+    "camera": "Camera",
+    "gallery": "Photo Gallery",
+    "imageUrlOptional": "Image URL (Optional)",
+    "pickImageFromDevice": "Pick Image from Device",
+    "removeImage": "Remove Image",
+    "markAsFeatured": "Mark as Featured",
+    "savedMessages": "Saved in My Heart",
+    "addSecretMessage": "Add Secret Message",
+    "writeSecretMessage": "Write a secret love message...",
+    "messageSavedInHeart": "Message saved in your heart ❤️",
+    "noSavedMessagesYet": "No saved messages yet",
+    "sortNewestFirst": "Newest First",
+    "sortOldestFirst": "Oldest First",
+    "upcomingAnniversary": "Upcoming Milestone",
+    "tagsOptional": "Tags (comma-separated)",
+    "save": "Save",
+    "tooManyAttempts": "Too many attempts, wait {seconds}s",
+    "@tooManyAttempts": {
+        "placeholders": {
+            "seconds": {
+                "type": "int"
+            }
+        }
+    },
+    "welcomeBaby": "Welcome {name}! 🎉",
+    "@welcomeBaby": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
     }
 }

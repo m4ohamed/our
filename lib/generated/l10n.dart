@@ -1388,6 +1388,236 @@ class S {
       args: [error],
     );
   }
+
+  /// `Pregnancy`
+  String get pregnancy {
+    return Intl.message(
+      'Pregnancy',
+      name: 'pregnancy',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Biometric Unlock`
+  String get biometricUnlock {
+    return Intl.message(
+      'Biometric Unlock',
+      name: 'biometricUnlock',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Use fingerprint or face`
+  String get biometricSubtitle {
+    return Intl.message(
+      'Use fingerprint or face',
+      name: 'biometricSubtitle',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Please authenticate to unlock Our Love Story`
+  String get biometricReason {
+    return Intl.message(
+      'Please authenticate to unlock Our Love Story',
+      name: 'biometricReason',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Choose Image Source`
+  String get chooseImageSource {
+    return Intl.message(
+      'Choose Image Source',
+      name: 'chooseImageSource',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Camera`
+  String get camera {
+    return Intl.message(
+      'Camera',
+      name: 'camera',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Photo Gallery`
+  String get gallery {
+    return Intl.message(
+      'Photo Gallery',
+      name: 'gallery',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Image URL (Optional)`
+  String get imageUrlOptional {
+    return Intl.message(
+      'Image URL (Optional)',
+      name: 'imageUrlOptional',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pick Image from Device`
+  String get pickImageFromDevice {
+    return Intl.message(
+      'Pick Image from Device',
+      name: 'pickImageFromDevice',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Remove Image`
+  String get removeImage {
+    return Intl.message(
+      'Remove Image',
+      name: 'removeImage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Mark as Featured`
+  String get markAsFeatured {
+    return Intl.message(
+      'Mark as Featured',
+      name: 'markAsFeatured',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Saved in My Heart`
+  String get savedMessages {
+    return Intl.message(
+      'Saved in My Heart',
+      name: 'savedMessages',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Add Secret Message`
+  String get addSecretMessage {
+    return Intl.message(
+      'Add Secret Message',
+      name: 'addSecretMessage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Write a secret love message...`
+  String get writeSecretMessage {
+    return Intl.message(
+      'Write a secret love message...',
+      name: 'writeSecretMessage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Message saved in your heart ❤️`
+  String get messageSavedInHeart {
+    return Intl.message(
+      'Message saved in your heart ❤️',
+      name: 'messageSavedInHeart',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `No saved messages yet`
+  String get noSavedMessagesYet {
+    return Intl.message(
+      'No saved messages yet',
+      name: 'noSavedMessagesYet',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Newest First`
+  String get sortNewestFirst {
+    return Intl.message(
+      'Newest First',
+      name: 'sortNewestFirst',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Oldest First`
+  String get sortOldestFirst {
+    return Intl.message(
+      'Oldest First',
+      name: 'sortOldestFirst',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Upcoming Milestone`
+  String get upcomingAnniversary {
+    return Intl.message(
+      'Upcoming Milestone',
+      name: 'upcomingAnniversary',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Tags (comma-separated)`
+  String get tagsOptional {
+    return Intl.message(
+      'Tags (comma-separated)',
+      name: 'tagsOptional',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Save`
+  String get save {
+    return Intl.message(
+      'Save',
+      name: 'save',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Too many attempts, wait {seconds}s`
+  String tooManyAttempts(int seconds) {
+    return Intl.message(
+      'Too many attempts, wait ${seconds}s',
+      name: 'tooManyAttempts',
+      desc: '',
+      args: [seconds],
+    );
+  }
+
+  /// `Welcome {name}! 🎉`
+  String welcomeBaby(String name) {
+    return Intl.message(
+      'Welcome $name! 🎉',
+      name: 'welcomeBaby',
+      desc: '',
+      args: [name],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<S> {

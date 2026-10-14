@@ -42,6 +42,10 @@ class MessageLookup extends MessageLookupByLibrary {
 
   static String m10(name) => "بكل الحب، ${name}";
 
+  static String m11(seconds) => "محاولات كثيرة خاطئة، انتظر ${seconds} ثانية";
+
+  static String m12(name) => "أهلاً بقدومك يا ${name}! 🎉";
+
   final messages = _notInlinedMessages(_notInlinedMessages);
   static Map<String, Function> _notInlinedMessages(_) => <String, Function>{
     "aboutApp": MessageLookupByLibrary.simpleMessage("حول التطبيق"),
@@ -243,6 +247,29 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "winter": MessageLookupByLibrary.simpleMessage("الشتاء"),
     "withLove": m10,
+    "pregnancy": MessageLookupByLibrary.simpleMessage("حمل"),
+    "biometricUnlock": MessageLookupByLibrary.simpleMessage("فتح القفل بالبصمة"),
+    "biometricSubtitle": MessageLookupByLibrary.simpleMessage("استخدام بصمة الإصبع أو الوجه"),
+    "biometricReason": MessageLookupByLibrary.simpleMessage("يرجى التحقق لفتح تطبيق قصة حبنا"),
+    "chooseImageSource": MessageLookupByLibrary.simpleMessage("اختر مصدر الصورة"),
+    "camera": MessageLookupByLibrary.simpleMessage("الكاميرا"),
+    "gallery": MessageLookupByLibrary.simpleMessage("معرض الصور"),
+    "imageUrlOptional": MessageLookupByLibrary.simpleMessage("رابط صورة (اختياري)"),
+    "pickImageFromDevice": MessageLookupByLibrary.simpleMessage("اختيار صورة من الجهاز"),
+    "removeImage": MessageLookupByLibrary.simpleMessage("إزالة الصورة"),
+    "markAsFeatured": MessageLookupByLibrary.simpleMessage("تمييز في المفضلة"),
+    "savedMessages": MessageLookupByLibrary.simpleMessage("رسائل محفوظة في قلبي"),
+    "addSecretMessage": MessageLookupByLibrary.simpleMessage("إضافة رسالة سرية"),
+    "writeSecretMessage": MessageLookupByLibrary.simpleMessage("اكتب رسالة حب سرية..."),
+    "messageSavedInHeart": MessageLookupByLibrary.simpleMessage("تم حفظ الرسالة في قلبك ❤️"),
+    "noSavedMessagesYet": MessageLookupByLibrary.simpleMessage("لا توجد رسائل محفوظة بعد"),
+    "sortNewestFirst": MessageLookupByLibrary.simpleMessage("الأحدث أولاً"),
+    "sortOldestFirst": MessageLookupByLibrary.simpleMessage("الأقدم أولاً"),
+    "upcomingAnniversary": MessageLookupByLibrary.simpleMessage("ذكرى قادمة قريباً"),
+    "tagsOptional": MessageLookupByLibrary.simpleMessage("الوسوم (مفصولة بفاصلة)"),
+    "save": MessageLookupByLibrary.simpleMessage("حفظ"),
+    "tooManyAttempts": m11,
+    "welcomeBaby": m12,
     "writeDetails": MessageLookupByLibrary.simpleMessage(
       "اكتب تفاصيل هذه الذكرى...",
     ),

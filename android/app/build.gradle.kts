@@ -5,6 +5,26 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// إذا وضع المستخدم ملف google-services.json في المجلد الرئيسي للمشروع، ننسخه تلقائياً إلى android/app/
+val rootGoogleServices = file("../../google-services.json")
+val appGoogleServices = file("google-services.json")
+if (rootGoogleServices.exists() && !appGoogleServices.exists()) {
+    rootGoogleServices.copyTo(appGoogleServices, overwrite = true)
+}
+
+// قراءة package_name تلقائياً من ملف google-services.json لضمان تطابق applicationId وعدم فشل البناء أبداً
+val detectedApplicationId: String = if (appGoogleServices.exists()) {
+    val content = appGoogleServices.readText()
+    val match = Regex(""""package_name"\s*:\s*"([^"]+)"""").find(content)
+    match?.groupValues?.get(1) ?: "com.our.loveStory"
+} else {
+    "com.our.loveStory"
+}
+
+if (appGoogleServices.exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.our.loveStory"
     compileSdk = flutter.compileSdkVersion
@@ -20,10 +40,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.our_love_story"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = detectedApplicationId
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -32,8 +49,6 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

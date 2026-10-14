@@ -1,9 +1,11 @@
 // lib/data/repositories/hive_timeline_repository.dart
 import 'dart:async';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../core/errors/app_exception.dart';
-import '../../../../domain/entities/timeline_event_entity.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/errors/app_exception.dart';
+import '../../domain/entities/timeline_event_entity.dart';
 import '../../domain/repositories/repositories.dart';
 import '../mappers/event_mapper.dart';
 import '../models/timeline_event_hive_model.dart';
@@ -11,10 +13,11 @@ import '../seeds/demo_events_seed.dart';
 
 class HiveTimelineRepository implements TimelineRepository {
   final Box<TimelineEventHiveModel> _box;
+  final SharedPreferences _prefs;
   final _streamController =
       StreamController<List<TimelineEventEntity>>.broadcast();
 
-  HiveTimelineRepository(this._box) {
+  HiveTimelineRepository(this._box, this._prefs) {
     // مراقبة أي تغيير في الـ box وبث التحديث
     _box.watch().listen((_) => _emit());
   }
@@ -28,8 +31,7 @@ class HiveTimelineRepository implements TimelineRepository {
   @override
   Future<Result<List<TimelineEventEntity>>> getAllEvents() async {
     try {
-      // التحقق دائماً من وجود كافة البيانات التجريبية (لبذور جديدة)
-      await _seedDemoEvents();
+      await _seedDemoEventsIfNeeded();
 
       final events = _box.values.map((m) => m.toEntity()).toList()
         ..sort((a, b) => a.date.compareTo(b.date));
@@ -83,6 +85,7 @@ class HiveTimelineRepository implements TimelineRepository {
   Future<Result<void>> deleteAllEvents() async {
     try {
       await _box.clear();
+      await _prefs.setBool(AppConstants.keyDemoEventsSeeded, true);
       return const Success(null);
     } catch (e) {
       return Failure(StorageException('فشل مسح الأحداث: $e'));
@@ -92,14 +95,15 @@ class HiveTimelineRepository implements TimelineRepository {
   @override
   Stream<List<TimelineEventEntity>> watchEvents() => _streamController.stream;
 
-  Future<void> _seedDemoEvents() async {
-    final now = DateTime.now();
+  Future<void> _seedDemoEventsIfNeeded() async {
+    final alreadySeeded =
+        _prefs.getBool(AppConstants.keyDemoEventsSeeded) ?? false;
+    if (alreadySeeded) return;
 
-    for (final seed in DemoEventsSeed.events) {
-      // استخدام العنوان كمفتاح لمنع التكرار والسماح بإضافة بذور جديدة
-      final demoId = 'demo_${seed.orderIndex}_${seed.title.hashCode}';
-
-      if (!_box.containsKey(demoId)) {
+    if (_box.isEmpty) {
+      final now = DateTime.now();
+      for (final seed in DemoEventsSeed.events) {
+        final demoId = 'demo_${seed.orderIndex}_${seed.title.hashCode}';
         final event = TimelineEventEntity(
           id: demoId,
           date: seed.date,
@@ -117,6 +121,7 @@ class HiveTimelineRepository implements TimelineRepository {
         await _box.put(demoId, event.toHiveModel());
       }
     }
+    await _prefs.setBool(AppConstants.keyDemoEventsSeeded, true);
   }
 
   void dispose() {

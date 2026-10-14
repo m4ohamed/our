@@ -569,5 +569,42 @@
                 "type": "String"
             }
         }
+    },
+    "pregnancy": "حمل",
+    "biometricUnlock": "فتح القفل بالبصمة",
+    "biometricSubtitle": "استخدام بصمة الإصبع أو الوجه",
+    "biometricReason": "يرجى التحقق لفتح تطبيق قصة حبنا",
+    "chooseImageSource": "اختر مصدر الصورة",
+    "camera": "الكاميرا",
+    "gallery": "معرض الصور",
+    "imageUrlOptional": "رابط صورة (اختياري)",
+    "pickImageFromDevice": "اختيار صورة من الجهاز",
+    "removeImage": "إزالة الصورة",
+    "markAsFeatured": "تمييز في المفضلة",
+    "savedMessages": "رسائل محفوظة في قلبي",
+    "addSecretMessage": "إضافة رسالة سرية",
+    "writeSecretMessage": "اكتب رسالة حب سرية...",
+    "messageSavedInHeart": "تم حفظ الرسالة في قلبك ❤️",
+    "noSavedMessagesYet": "لا توجد رسائل محفوظة بعد",
+    "sortNewestFirst": "الأحدث أولاً",
+    "sortOldestFirst": "الأقدم أولاً",
+    "upcomingAnniversary": "ذكرى قادمة قريباً",
+    "tagsOptional": "الوسوم (مفصولة بفاصلة)",
+    "save": "حفظ",
+    "tooManyAttempts": "محاولات كثيرة خاطئة، انتظر {seconds} ثانية",
+    "@tooManyAttempts": {
+        "placeholders": {
+            "seconds": {
+                "type": "int"
+            }
+        }
+    },
+    "welcomeBaby": "أهلاً بقدومك يا {name}! 🎉",
+    "@welcomeBaby": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
     }
 }

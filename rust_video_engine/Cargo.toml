@@ -1,0 +1,11 @@
+[package]
+name = "rust_video_engine"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance Keyframe interpolation, transition math, and FFmpeg filtergraph compiler for Our Love Story Flutter app"
+
+[lib]
+name = "rust_video_engine"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]

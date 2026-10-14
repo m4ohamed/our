@@ -8,9 +8,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/widgets/glass_container.dart';
+import '../../generated/l10n.dart';
 import '../providers/app_providers.dart';
 
-// Provider منفصل يتحدث كل ثانية
 final _tickProvider = StreamProvider<DateTime>((ref) {
   return Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now());
 });
@@ -41,9 +41,8 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // نستمع للـ tick لكن نحسب الوقت هنا
     ref.watch(_tickProvider);
-
+    final s = S.of(context);
     final isPast = ref.watch(isWeddingPastProvider);
     final weddingDate = AppConstants.weddingDate;
 
@@ -72,7 +71,6 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
       ),
       body: Stack(
         children: [
-          // Background
           Positioned.fill(
             child: RepaintBoundary(
               child: Container(
@@ -91,7 +89,6 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
             ),
           ),
 
-          // Confetti
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
@@ -113,9 +110,11 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildHeader(),
+                  _buildHeader(s),
                   const SizedBox(height: 60),
-                  isPast ? _buildPastState(weddingDate) : _buildCountdown(),
+                  isPast
+                      ? _buildPastState(weddingDate, s)
+                      : _buildCountdown(s),
                   const SizedBox(height: 60),
                   _buildVenueInfo(),
                 ],
@@ -127,7 +126,7 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(S s) {
     return Column(
       children: [
         RepaintBoundary(
@@ -146,7 +145,7 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
         ),
         const SizedBox(height: 16),
         Text(
-          AppConstants.coupleName,
+          s.coupleName,
           style: GoogleFonts.notoSerif(
             fontSize: 32,
             fontWeight: FontWeight.bold,
@@ -157,8 +156,8 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
         const SizedBox(height: 8),
         Text(
           DateTime.now().isAfter(AppConstants.weddingDate)
-              ? 'قصة حبنا المستمرة'
-              : 'نعد الأيام لنكون معاً',
+              ? s.ongoingLoveStory
+              : s.countingDaysTogether,
           style: GoogleFonts.manrope(
             fontSize: 16,
             color: Theme.of(context).colorScheme.outline,
@@ -170,7 +169,7 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
     );
   }
 
-  Widget _buildCountdown() {
+  Widget _buildCountdown(S s) {
     final now = DateTime.now();
     final remaining = AppConstants.weddingDate.difference(now);
     final days = remaining.inDays;
@@ -181,25 +180,25 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _TimeUnit(value: days, label: 'يوم'),
+        _TimeUnit(value: days, label: s.day),
         _Separator(),
-        _TimeUnit(value: hours, label: 'ساعة'),
+        _TimeUnit(value: hours, label: s.hour),
         _Separator(),
-        _TimeUnit(value: minutes, label: 'دقيقة'),
+        _TimeUnit(value: minutes, label: s.minute),
         _Separator(),
-        _TimeUnit(value: seconds, label: 'ثانية'),
+        _TimeUnit(value: seconds, label: s.second),
       ],
     ).animate().fadeIn(delay: 600.ms).scale(begin: const Offset(0.95, 0.95));
   }
 
-  Widget _buildPastState(DateTime date) {
+  Widget _buildPastState(DateTime date, S s) {
     final daysSince = DateTime.now().difference(date).inDays;
     return GlassContainer(
       padding: const EdgeInsets.all(32),
       child: Column(
         children: [
           Text(
-            'منذ أن بدأت رحلتنا الحقيقية',
+            s.sinceJourneyStarted,
             textAlign: TextAlign.center,
             style: GoogleFonts.notoSerif(
               fontSize: 22,
@@ -209,7 +208,7 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            '$daysSince يوم من الحب',
+            s.daysTogether(daysSince),
             style: GoogleFonts.dancingScript(
               fontSize: 36,
               fontWeight: FontWeight.bold,
@@ -277,8 +276,6 @@ class _CountdownScreenState extends ConsumerState<CountdownScreen> {
     ).animate().fadeIn(delay: 1.seconds);
   }
 }
-
-// ─── Time Unit Widget ────────────────────────────────────────────────────────
 
 class _TimeUnit extends StatelessWidget {
   final int value;

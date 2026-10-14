@@ -1,4 +1,5 @@
 // lib/presentation/screens/timeline_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,11 +34,12 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   @override
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(timelineProvider);
+    final isAscending = ref.watch(timelineSortAscendingProvider);
     final s = S.of(context);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: _buildAppBar(context, s),
+      appBar: _buildAppBar(context, s, isAscending),
       body: Stack(
         children: [
           _buildBackground(),
@@ -53,7 +55,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              error: (e, _) => Center(child: Text('${s.error}: $e')),
             ),
           ),
         ],
@@ -62,7 +64,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
     );
   }
 
-  AppBar _buildAppBar(BuildContext context, S s) {
+  AppBar _buildAppBar(BuildContext context, S s, bool isAscending) {
     return AppBar(
       title: Text(s.ourJourney),
       backgroundColor: Colors.transparent,
@@ -76,7 +78,11 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
           icon: const Icon(Icons.more_horiz_rounded),
           onSelected: (val) => _handleMenuAction(val, s),
           itemBuilder: (_) => [
-            _menuItem('sort', Icons.sort, s.sortDate),
+            _menuItem(
+              'sort',
+              Icons.swap_vert_rounded,
+              '${s.sortDate} (${isAscending ? s.sortNewestFirst : s.sortOldestFirst})',
+            ),
             _menuItem('add', Icons.add_circle_outline, s.addMemory),
           ],
         ),
@@ -91,7 +97,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
         children: [
           Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
           const SizedBox(width: 12),
-          Text(label, style: GoogleFonts.manrope()),
+          Flexible(child: Text(label, style: GoogleFonts.manrope())),
         ],
       ),
     );
@@ -191,21 +197,26 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   }
 
   Widget _buildFooter(S s) {
+    final animationsEnabled = ref.watch(isAnimationsEnabledProvider);
+    final icon = Icon(
+      Icons.favorite,
+      color: Theme.of(context).colorScheme.primary,
+      size: 30,
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 80),
       child: Column(
         children: [
-          Icon(
-                Icons.favorite,
-                color: Theme.of(context).colorScheme.primary,
-                size: 30,
-              )
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scale(
-                duration: 1000.ms,
-                begin: const Offset(0.8, 0.8),
-                end: const Offset(1.2, 1.2),
-              ),
+          animationsEnabled
+              ? icon
+                    .animate(onPlay: (c) => c.repeat(reverse: true))
+                    .scale(
+                      duration: 1000.ms,
+                      begin: const Offset(0.8, 0.8),
+                      end: const Offset(1.2, 1.2),
+                    )
+              : icon,
           const SizedBox(height: 16),
           Text(
             s.storyNotEnded,
@@ -262,7 +273,11 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   }
 
   void _handleMenuAction(String action, S s) {
-    if (action == 'add') _showAddForm(s);
+    if (action == 'add') {
+      _showAddForm(s);
+    } else if (action == 'sort') {
+      ref.read(timelineSortAscendingProvider.notifier).toggle();
+    }
   }
 
   void _showAddForm(S s) {
@@ -353,8 +368,6 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   }
 }
 
-// ─── Timeline Tile Widget (مُعاد تفكيكه كـ Widget منفصل للأداء) ──────────────
-
 class _TimelineTile extends StatelessWidget {
   final TimelineEventEntity event;
   final bool isFirst;
@@ -436,6 +449,12 @@ class _TimelineTile extends StatelessWidget {
   }
 
   Widget _buildCard(BuildContext context) {
+    final hasLocalImage =
+        event.localImagePath != null &&
+        File(event.localImagePath!).existsSync();
+    final hasNetworkImage =
+        event.imageUrl != null && event.imageUrl!.isNotEmpty;
+
     return Container(
           margin: const EdgeInsets.only(
             left: 12,
@@ -498,34 +517,41 @@ class _TimelineTile extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (event.imageUrl != null) ...[
+                if (hasLocalImage || hasNetworkImage) ...[
                   const SizedBox(height: 16),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: CachedNetworkImage(
-                      imageUrl: event.imageUrl!,
-                      height: 160,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) => Container(
-                        height: 160,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerHighest,
-                      ),
-                      errorWidget: (_, _, _) => Container(
-                        height: 160,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerHighest,
-                        child: Center(
-                          child: Icon(
-                            Icons.image_not_supported,
-                            color: Theme.of(context).colorScheme.outline,
+                    child: hasLocalImage
+                        ? Image.file(
+                            File(event.localImagePath!),
+                            height: 160,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: event.imageUrl!,
+                            height: 160,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            placeholder: (_, _) => Container(
+                              height: 160,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                            ),
+                            errorWidget: (_, _, _) => Container(
+                              height: 160,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                              child: Center(
+                                child: Icon(
+                                  Icons.image_not_supported,
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
                   ),
                 ],
               ],
@@ -606,6 +632,6 @@ class _TimelineTile extends StatelessWidget {
       s.november,
       s.december,
     ];
-    return '${date.day} ${months[date.month]}';
+    return '${date.day} ${months[date.month]} ${date.year}';
   }
 }

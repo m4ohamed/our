@@ -1,5 +1,5 @@
 // lib/data/mappers/event_mapper.dart
-import '../../../../domain/entities/timeline_event_entity.dart';
+import '../../domain/entities/timeline_event_entity.dart';
 import '../models/timeline_event_hive_model.dart';
 
 extension TimelineEventMapper on TimelineEventHiveModel {

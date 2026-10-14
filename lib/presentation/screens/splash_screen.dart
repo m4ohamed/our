@@ -1,3 +1,4 @@
+// lib/presentation/screens/splash_screen.dart
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../generated/l10n.dart';
 import '../providers/audio_provider.dart';
 import '../providers/app_providers.dart';
 import 'home_screen.dart';
+import 'pin_setup_screen.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -23,14 +25,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // نبدأ الـ audio controller هنا مرة واحدة فقط
     _initAudio();
-    _navTimer = Timer(const Duration(seconds: 3), _navigateToHome);
+    _navTimer = Timer(const Duration(seconds: 3), _navigateToNext);
   }
 
   void _initAudio() {
-    // نحصل على الـ controller لكن لا نشغّل الموسيقى هنا
-    // ستُشغَّل من الـ settings provider تلقائياً
     final audioCtrl = ref.read(audioControllerProvider);
     final musicEnabled = ref.read(isMusicEnabledProvider);
     final volume = ref.read(musicVolumeProvider);
@@ -39,12 +38,30 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
   }
 
-  void _navigateToHome() {
+  Future<void> _navigateToNext() async {
     if (!mounted) return;
+    final settings = await ref.read(settingsProvider.future);
+    if (!mounted) return;
+
+    final shouldRequirePin =
+        settings.pinEnabled &&
+        settings.pinHash != null &&
+        settings.pinHash!.isNotEmpty;
+
+    final Widget targetScreen = shouldRequirePin
+        ? PinVerifyScreen(
+            onVerified: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const HomeScreen()),
+              );
+            },
+          )
+        : const HomeScreen();
+
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, _, _) => const HomeScreen(),
+        pageBuilder: (_, _, _) => targetScreen,
         transitionsBuilder: (_, anim, _, child) =>
             FadeTransition(opacity: anim, child: child),
         transitionDuration: const Duration(milliseconds: 800),
@@ -60,11 +77,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final animationsEnabled = ref.watch(isAnimationsEnabledProvider);
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: Stack(
         children: [
-          // Background gradient — static, no RepaintBoundary needed بما أنه لا يتغير
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -81,15 +99,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             ),
           ),
 
-          // Falling hearts — مُحسَّن: نقيّد عددها وبدون setState
-          const _FallingHearts(),
+          if (animationsEnabled) const _FallingHearts(),
 
-          // Main content
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildMainHeart(),
+                _buildMainHeart(animationsEnabled),
                 const SizedBox(height: 60),
                 _buildTitles(context),
                 const SizedBox(height: 100),
@@ -102,7 +118,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     );
   }
 
-  Widget _buildMainHeart() {
+  Widget _buildMainHeart(bool animationsEnabled) {
+    final heartIcon = Icon(
+      Icons.favorite_rounded,
+      size: 70,
+      color: Theme.of(context).colorScheme.primary,
+    );
+
     return RepaintBoundary(
           child: Container(
             width: 160,
@@ -134,19 +156,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                       ).colorScheme.surface.withValues(alpha: 0.5),
                     ),
                   ),
-                  child:
-                      Icon(
-                            Icons.favorite_rounded,
-                            size: 70,
-                            color: Theme.of(context).colorScheme.primary,
-                          )
-                          .animate(onPlay: (c) => c.repeat(reverse: true))
-                          .scale(
-                            begin: const Offset(1.0, 1.0),
-                            end: const Offset(1.15, 1.15),
-                            duration: 1500.ms,
-                            curve: Curves.easeInOut,
-                          ),
+                  child: animationsEnabled
+                      ? heartIcon
+                            .animate(onPlay: (c) => c.repeat(reverse: true))
+                            .scale(
+                              begin: const Offset(1.0, 1.0),
+                              end: const Offset(1.15, 1.15),
+                              duration: 1500.ms,
+                              curve: Curves.easeInOut,
+                            )
+                      : heartIcon,
                 ),
               ),
             ),
@@ -238,9 +257,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 }
 
-// ─── Falling Hearts مُحسَّنة ───────────────────────────────────────────────────
-/// مُعزولة في widget منفصل → لا تُعيد بناء الشجرة كلها
-/// عدد مُخفَّض من 15 إلى 8 لتحسين الأداء
 class _FallingHearts extends StatelessWidget {
   const _FallingHearts();
 
