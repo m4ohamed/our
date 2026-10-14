@@ -304,7 +304,8 @@ class _EventFormSheetState extends State<EventFormSheet> {
                 right: 8,
                 child: IconButton.filled(
                   style: IconButton.styleFrom(
-                    backgroundColor: theme.colorScheme.scrim.withValues(alpha: 0.54),
+                    backgroundColor:
+                        theme.colorScheme.scrim.withValues(alpha: 0.54),
                   ),
                   icon: Icon(
                     Icons.close_rounded,
@@ -374,7 +375,9 @@ class _EventFormSheetState extends State<EventFormSheet> {
           firstDate: DateTime(2020),
           lastDate: DateTime(2035),
         );
-        if (picked != null) setState(() => _date = picked);
+        if (picked != null && mounted) {
+          setState(() => _date = picked);
+        }
       },
     );
   }

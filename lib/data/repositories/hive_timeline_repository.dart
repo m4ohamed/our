@@ -74,7 +74,7 @@ class HiveTimelineRepository implements TimelineRepository {
   Future<Result<void>> deleteEvent(String id) async {
     try {
       final existing = _box.get(id);
-      if (existing != null && existing.isDemo) {
+      if (existing != null && (existing.isDemo || id.startsWith('demo_'))) {
         // منع إعادة زرع البيانات التجريبية بعد قيام المستخدم بحذف حدث تجريبي
         await _prefs.setBool(AppConstants.keyDemoEventsSeeded, true);
       }
@@ -103,9 +103,20 @@ class HiveTimelineRepository implements TimelineRepository {
   Future<void> _seedDemoEvents() async {
     final enableDemoData =
         _prefs.getBool(AppConstants.keyEnableDemoData) ?? true;
+    if (!enableDemoData) {
+      final demoKeys = _box.values
+          .where((m) => m.isDemo || m.id.startsWith('demo_'))
+          .map((m) => m.id)
+          .toList();
+      if (demoKeys.isNotEmpty) {
+        await _box.deleteAll(demoKeys);
+      }
+      return;
+    }
+
     final alreadySeeded =
         _prefs.getBool(AppConstants.keyDemoEventsSeeded) ?? false;
-    if (!enableDemoData || alreadySeeded) return;
+    if (alreadySeeded) return;
 
     if (_box.isEmpty) {
       final now = DateTime.now();

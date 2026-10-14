@@ -52,14 +52,14 @@ class RewardWheelItem {
 
   const RewardWheelItem({required this.text, required this.colorValue});
 
-  Color get color => Color(colorValue);
+  Color get color => AppTheme.fromCode(colorValue);
 
   Map<String, dynamic> toJson() => {'text': text, 'colorValue': colorValue};
 
   factory RewardWheelItem.fromJson(Map<String, dynamic> json) {
     return RewardWheelItem(
       text: (json['text'] as String?) ?? '',
-      colorValue: (json['colorValue'] as num?)?.toInt() ?? 0xFFF43F5E,
+      colorValue: (json['colorValue'] as num?)?.toInt() ?? AppTheme.rewardRoseCode,
     );
   }
 }
@@ -175,12 +175,30 @@ const List<String> kDefaultWhosMoreQuestions = [
 ];
 
 const List<RewardWheelItem> kDefaultRewards = [
-  RewardWheelItem(text: 'مساج للكتفين والرقبة 10 دقائق 💆', colorValue: 0xFFF43F5E),
-  RewardWheelItem(text: 'تحضير مشروب السهرة المفضل ☕', colorValue: 0xFF9333EA),
-  RewardWheelItem(text: 'إعفاء كامل من مهام الليلة 👑', colorValue: 0xFFEC4899),
-  RewardWheelItem(text: 'اختيار فيلم أو عشاء الغد 🍕', colorValue: 0xFF3B82F6),
-  RewardWheelItem(text: 'ثلاث أمنيات لطيفة تنفذ الليلة ✨', colorValue: 0xFF10B981),
-  RewardWheelItem(text: 'رسالة حب صوتية أو مكتوبة الآن 💌', colorValue: 0xFFF59E0B),
+  RewardWheelItem(
+    text: 'مساج للكتفين والرقبة 10 دقائق 💆',
+    colorValue: AppTheme.rewardRoseCode,
+  ),
+  RewardWheelItem(
+    text: 'تحضير مشروب السهرة المفضل ☕',
+    colorValue: AppTheme.rewardPurpleCode,
+  ),
+  RewardWheelItem(
+    text: 'إعفاء كامل من مهام الليلة 👑',
+    colorValue: AppTheme.rewardPinkCode,
+  ),
+  RewardWheelItem(
+    text: 'اختيار فيلم أو عشاء الغد 🍕',
+    colorValue: AppTheme.rewardBlueCode,
+  ),
+  RewardWheelItem(
+    text: 'ثلاث أمنيات لطيفة تنفذ الليلة ✨',
+    colorValue: AppTheme.rewardGreenCode,
+  ),
+  RewardWheelItem(
+    text: 'رسالة حب صوتية أو مكتوبة الآن 💌',
+    colorValue: AppTheme.rewardAmberCode,
+  ),
 ];
 
 class _FlyingEmoji {
@@ -1005,8 +1023,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
       setState(() {
         _speedSignal = 'idle';
         _speedBannerText = (ev['msg'] as String?) ?? '';
-        _speedBannerColor = Color(
-          (ev['colorValue'] as num?)?.toInt() ?? 0xFF10B981,
+        _speedBannerColor = AppTheme.fromCode(
+          (ev['colorValue'] as num?)?.toInt() ?? AppTheme.rewardGreenCode,
         );
         _speedBannerDarkText = false;
       });
@@ -1065,7 +1083,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
 
     final pName = role == 'p1' ? _p1Name : _p2Name;
     String msg = '';
-    int colorVal = 0xFFEF4444;
+    int colorVal = AppTheme.dangerRedCode;
 
     setState(() {
       if (_speedSignal == 'wait' || _speedSignal == 'red') {
@@ -1076,7 +1094,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           _p2Score = math.max(0, _p2Score - 1);
         }
         msg = '❌ تسرّع $pName! (-1 نقطة) اضغط لجولة جديدة';
-        colorVal = 0xFFEF4444;
+        colorVal = AppTheme.dangerRedCode;
       } else if (_speedSignal == 'green') {
         final sec = (_speedStopwatch.elapsedMilliseconds / 1000.0)
             .toStringAsFixed(3);
@@ -1086,14 +1104,14 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           _p2Score += 2;
         }
         _harmony = math.min(100, _harmony + 6);
-        colorVal = 0xFF10B981;
+        colorVal = AppTheme.rewardGreenCode;
         msg = '⚡ فاز $pName بزمن $sec ثانية! (+2 نقطة)';
         _burstConfetti();
       }
 
       _speedSignal = 'idle';
       _speedBannerText = msg;
-      _speedBannerColor = Color(colorVal);
+      _speedBannerColor = AppTheme.fromCode(colorVal);
       _speedBannerDarkText = false;
     });
 
@@ -1213,7 +1231,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                     ),
                     child: Column(
                       children: [
-                        _buildCloudBar(isDark),
+                        _buildCloudBar(),
                         const SizedBox(height: 8),
                         _buildTopHeader(isDark, unredeemedCoupons),
                         const SizedBox(height: 8),
@@ -1272,8 +1290,8 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
     );
   }
 
-  Widget _buildCloudBar(bool isDark) {
-    final cardColor = isDark ? AppTheme.cardSurface(context) : AppTheme.white;
+  Widget _buildCloudBar() {
+    final cardColor = AppTheme.cardSurface(context);
     final dotColor = _roomId == null
         ? Theme.of(context).colorScheme.outline
         : (_partnerOnline ? AppTheme.emeraldGreen : AppTheme.amberGold);
@@ -1352,9 +1370,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
   }
 
   Widget _buildTopHeader(bool isDark, int unredeemedCoupons) {
-    final cardColor = isDark
-        ? AppTheme.cardSurface(context).withValues(alpha: 0.92)
-        : AppTheme.white.withValues(alpha: 0.92);
+    final cardColor = AppTheme.cardSurface(context).withValues(alpha: 0.92);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1438,9 +1454,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
   }
 
   Widget _buildHudPanel(bool isDark) {
-    final cardColor = isDark
-        ? AppTheme.cardSurface(context).withValues(alpha: 0.92)
-        : AppTheme.white.withValues(alpha: 0.92);
+    final cardColor = AppTheme.cardSurface(context).withValues(alpha: 0.92);
 
     // Determine whose turn it is for highlight
     bool p1Active = false;
@@ -1519,9 +1533,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   borderRadius: BorderRadius.circular(99),
                   child: Container(
                     height: 8,
-                    color: isDark
-                        ? AppTheme.subtleSurface(context)
-                        : AppTheme.subtleSurface(context),
+                    color: AppTheme.subtleSurface(context),
                     alignment: Alignment.centerRight,
                     child: FractionallySizedBox(
                       widthFactor: (_harmony.clamp(10, 100)) / 100.0,
@@ -1565,9 +1577,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isDark
-            ? AppTheme.cardSurface(context).withValues(alpha: 0.92)
-            : AppTheme.white.withValues(alpha: 0.92),
+        color: AppTheme.cardSurface(context).withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: AppTheme.primaryRose.withValues(alpha: 0.2),
@@ -1588,7 +1598,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? (isDark ? AppTheme.cardSurface(context) : AppTheme.white)
+                      ? (AppTheme.cardSurface(context))
                       : AppTheme.transparentColor,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: isSelected
@@ -1625,9 +1635,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
   }
 
   Widget _buildStageCard(bool isDark) {
-    final cardColor = isDark
-        ? AppTheme.cardSurface(context).withValues(alpha: 0.94)
-        : AppTheme.white.withValues(alpha: 0.94);
+    final cardColor = AppTheme.cardSurface(context).withValues(alpha: 0.94);
 
     Widget content;
     switch (_activeTab) {
@@ -1751,7 +1759,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+                      color: AppTheme.cardSurface(context),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: m.$5.withValues(alpha: 0.35),
@@ -1832,7 +1840,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
               ),
               selected: active,
               selectedColor: AppTheme.primaryRose,
-              backgroundColor: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+              backgroundColor: AppTheme.cardSurface(context),
               onSelected: (_) => _selectTawafoqCategory(c),
             ),
           );
@@ -1901,7 +1909,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+              color: AppTheme.cardSurface(context),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: AppTheme.primaryRose.withValues(alpha: 0.25),
@@ -2022,7 +2030,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+              color: AppTheme.cardSurface(context),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: AppTheme.secondaryPurple.withValues(alpha: 0.25),
@@ -2117,7 +2125,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           width: double.infinity,
           padding: const EdgeInsets.all(11),
           decoration: BoxDecoration(
-            color: isDark ? AppTheme.subtleSurface(context) : AppTheme.subtleSurface(context),
+            color: AppTheme.subtleSurface(context),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: AppTheme.primaryRose.withValues(alpha: 0.25),
@@ -2197,7 +2205,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+                    color: AppTheme.cardSurface(context),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: AppTheme.primaryRose.withValues(alpha: 0.3),
@@ -2230,7 +2238,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+                    color: AppTheme.cardSurface(context),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: AppTheme.secondaryPurple.withValues(alpha: 0.3),
@@ -2319,7 +2327,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+            color: AppTheme.cardSurface(context),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: AppTheme.primaryRose.withValues(alpha: 0.25),
@@ -2430,9 +2438,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? AppTheme.subtleSurface(context)
-                        : AppTheme.subtleSurface(context),
+                    color: AppTheme.subtleSurface(context),
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
@@ -2482,7 +2488,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                       decoration: BoxDecoration(
                         color: isWin
                             ? AppTheme.emeraldGreen.withValues(alpha: 0.22)
-                            : (isDark ? AppTheme.cardSurface(context) : AppTheme.white),
+                            : (AppTheme.cardSurface(context)),
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
                           color: isWin
@@ -2532,9 +2538,9 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
     final bottomRole = isCloud && _myRole == 'p2' ? 'p2' : 'p1';
     final bottomName = bottomRole == 'p2' ? _p2Name : _p1Name;
     final bottomEmoji = bottomRole == 'p2' ? '👸' : '🤴';
-    final bottomGradient = bottomRole == 'p2'
-        ? [AppTheme.secondaryPurpleLight, AppTheme.secondaryPurpleDark]
-        : [AppTheme.primaryRose, AppTheme.primaryRoseDark];
+    final bottomGradient = AppTheme.speedPadGradient(
+      isSecondPartner: bottomRole == 'p2',
+    );
 
     return Column(
       children: [
@@ -2560,7 +2566,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                   width: double.infinity,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AppTheme.secondaryPurpleLight, AppTheme.secondaryPurpleDark],
+                      colors: AppTheme.speedPadGradient(isSecondPartner: true),
                     ),
                     borderRadius: BorderRadius.circular(18),
                   ),
@@ -2591,7 +2597,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
             decoration: BoxDecoration(
               color: _speedBannerDarkText
-                  ? (isDark ? AppTheme.subtleSurface(context) : AppTheme.subtleSurface(context))
+                  ? (AppTheme.subtleSurface(context))
                   : _speedBannerColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
@@ -2717,7 +2723,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: isDark ? AppTheme.subtleSurface(context) : AppTheme.subtleSurface(context),
+            color: AppTheme.subtleSurface(context),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: AppTheme.primaryRose.withValues(alpha: 0.25),
@@ -2746,9 +2752,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: isDark
-            ? AppTheme.cardSurface(context).withValues(alpha: 0.92)
-            : AppTheme.white.withValues(alpha: 0.92),
+        color: AppTheme.cardSurface(context).withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(99),
         border: Border.all(
           color: AppTheme.primaryRose.withValues(alpha: 0.2),
@@ -2803,7 +2807,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                 child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+                    color: AppTheme.cardSurface(context),
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(28),
                     ),
@@ -2840,9 +2844,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                         Container(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? AppTheme.subtleSurface(context)
-                                : AppTheme.subtleSurface(context),
+                            color: AppTheme.subtleSurface(context),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: AppTheme.primaryRose,
@@ -2961,9 +2963,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                                 counterText: '',
                                 hintText: '4829',
                                 filled: true,
-                                fillColor: isDark
-                                    ? AppTheme.subtleSurface(context)
-                                    : AppTheme.subtleSurface(context),
+                                fillColor: AppTheme.subtleSurface(context),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: BorderSide.none,
@@ -3032,7 +3032,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
               child: Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+                  color: AppTheme.cardSurface(context),
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(28),
                   ),
@@ -3085,14 +3085,12 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                                 vertical: 10,
                               ),
                               decoration: BoxDecoration(
-                                color: isDark
-                                    ? AppTheme.subtleSurface(context)
-                                    : AppTheme.subtleSurface(context),
+                                color: AppTheme.subtleSurface(context),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: const Color(
-                                    0xFFF43F5E,
-                                  ).withValues(alpha: 0.25),
+                                  color: Theme.of(
+                                    ctx,
+                                  ).colorScheme.primary.withValues(alpha: 0.25),
                                 ),
                               ),
                               child: Row(
@@ -3181,7 +3179,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+                color: AppTheme.cardSurface(context),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(28),
                 ),
@@ -3263,14 +3261,7 @@ class _CouplesNightScreenState extends ConsumerState<CouplesNightScreen>
                         onPressed: () {
                           final txt = rewardCtrl.text.trim();
                           if (txt.isEmpty) return;
-                          const palette = [
-                            0xFFF43F5E,
-                            0xFF9333EA,
-                            0xFF10B981,
-                            0xFF3B82F6,
-                            0xFFF59E0B,
-                            0xFFEC4899,
-                          ];
+                          const palette = AppTheme.rewardColorCodes;
                           setState(() {
                             _rewards.insert(
                               0,
@@ -3360,7 +3351,7 @@ class _HeaderToolBtn extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
           decoration: BoxDecoration(
-            color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+            color: AppTheme.cardSurface(context),
             borderRadius: BorderRadius.circular(11),
             border: Border.all(
               color: AppTheme.primaryRose.withValues(alpha: 0.22),
@@ -3404,7 +3395,7 @@ class _PlayerScoreCard extends StatelessWidget {
           duration: const Duration(milliseconds: 220),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+            color: AppTheme.cardSurface(context),
             borderRadius: BorderRadius.circular(15),
             border: Border.all(
               color: isActiveTurn
@@ -3506,7 +3497,7 @@ class _OptionChoiceButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.cardSurface(context) : AppTheme.white,
+          color: AppTheme.cardSurface(context),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: AppTheme.primaryRose.withValues(alpha: 0.24),
@@ -3581,9 +3572,7 @@ class _SecondaryActionButton extends StatelessWidget {
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppTheme.primaryRose,
-          backgroundColor: isDark
-              ? AppTheme.subtleSurface(context)
-              : AppTheme.subtleSurface(context),
+          backgroundColor: AppTheme.subtleSurface(context),
           side: BorderSide(
             color: AppTheme.primaryRose.withValues(alpha: 0.3),
           ),

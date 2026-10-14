@@ -61,6 +61,9 @@ class HiveMediaRepository implements MediaRepository {
   @override
   Future<Result<void>> deleteMedia(String id) async {
     try {
+      if (id.startsWith('demo_')) {
+        await _prefs.setBool(AppConstants.keyDemoMediaSeeded, true);
+      }
       await _box.delete(id);
       await _prefs.setBool(AppConstants.keyDemoMediaSeeded, true);
       return const Success(null);
@@ -102,9 +105,20 @@ class HiveMediaRepository implements MediaRepository {
   Future<void> _seedIfNeeded() async {
     final enableDemoData =
         _prefs.getBool(AppConstants.keyEnableDemoData) ?? true;
+    if (!enableDemoData) {
+      final demoKeys = _box.values
+          .where((m) => m.id.startsWith('demo_'))
+          .map((m) => m.id)
+          .toList();
+      if (demoKeys.isNotEmpty) {
+        await _box.deleteAll(demoKeys);
+      }
+      return;
+    }
+
     final alreadySeeded =
         _prefs.getBool(AppConstants.keyDemoMediaSeeded) ?? false;
-    if (!enableDemoData || alreadySeeded) return;
+    if (alreadySeeded) return;
 
     if (_box.isEmpty) {
       for (final item in DemoMediaSeed.items) {

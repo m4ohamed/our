@@ -16,9 +16,11 @@ import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/errors/app_exception.dart';
 import '../../core/services/rust_video_bridge.dart';
 import '../../domain/entities/entities.dart';
 import '../../domain/entities/video_project_entity.dart';
+import '../../theme/app_theme.dart';
 import '../providers/app_providers.dart';
 import '../providers/audio_provider.dart';
 import '../providers/media_provider.dart';
@@ -416,10 +418,10 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         _project.textTracks.length - 1,
       );
       final track = _project.textTracks[safeTxtIdx];
-      final localT = (_playheadTime - track.startTime).clamp(
+      final double localT = (_playheadTime - track.startTime).clamp(
         0.0,
         math.max(0.1, track.endTime - track.startTime),
-      );
+      ).toDouble();
       return RustVideoBridge.instance.evaluateKeyframes(
         track.keyframes,
         localT,
@@ -447,10 +449,10 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         _project.textTracks.length - 1,
       );
       final track = _project.textTracks[safeTxtIdx];
-      final localT = (_playheadTime - track.startTime).clamp(
+      final double localT = (_playheadTime - track.startTime).clamp(
         0.0,
         math.max(0.1, track.endTime - track.startTime),
-      );
+      ).toDouble();
       final updatedKfs = _upsertInList(
         track.keyframes,
         localT,
@@ -707,10 +709,10 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         _project.textTracks.length - 1,
       );
       final track = _project.textTracks[safeTxtIdx];
-      final localTime = (_playheadTime - track.startTime).clamp(
+      final double localTime = (_playheadTime - track.startTime).clamp(
         0.0,
         math.max(0.1, track.endTime - track.startTime),
-      );
+      ).toDouble();
       final evaluated = RustVideoBridge.instance.evaluateKeyframes(
         track.keyframes,
         localTime,
@@ -997,11 +999,11 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
             child: FilledButton.icon(
               onPressed: _isExporting ? null : _exportVideo,
               icon: _isExporting
-                  ? const SizedBox.square(
+                  ? SizedBox.square(
                       dimension: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: AppTheme.white,
+                        color: theme.colorScheme.onPrimary,
                       ),
                     )
                   : const Icon(Icons.movie_creation_outlined, size: 18),
@@ -1065,13 +1067,15 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     if (_project.clips.isEmpty) {
       return Container(
         decoration: BoxDecoration(
-          color: AppTheme.black.withValues(alpha: 0.87),
+          color: theme.colorScheme.scrim.withValues(alpha: 0.87),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'أضف صوراً أو مقاطع فيديو للبدء',
-            style: TextStyle(color: AppTheme.white.withValues(alpha: 0.7)),
+            style: TextStyle(
+              color: theme.colorScheme.onPrimary.withValues(alpha: 0.7),
+            ),
           ),
         ),
       );
@@ -1162,8 +1166,8 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                       center: Alignment.center,
                       radius: 0.9,
                       colors: [
-                        AppTheme.transparentColor,
-                        AppTheme.black.withValues(alpha: vignetteAmount),
+                        AppTheme.transparent(context),
+                        Theme.of(context).colorScheme.scrim.withValues(alpha: vignetteAmount),
                       ],
                       stops: const [0.45, 1.0],
                     ),
@@ -1187,13 +1191,13 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: AppTheme.black.withValues(alpha: 0.54),
+                    color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.54),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${_playheadTime.toStringAsFixed(1)}s / ${_project.totalDuration.toStringAsFixed(1)}s • اسحب للتحريك ◆',
                     style: GoogleFonts.manrope(
-                      color: AppTheme.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1273,11 +1277,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(clip.cardColorValue),
-              AppTheme.studioClipBg1,
-              AppTheme.studioClipBg2,
-            ],
+            colors: AppTheme.studioCardGradient(clip.cardColorValue),
           ),
         ),
         child: Center(
@@ -1286,9 +1286,9 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.favorite_rounded,
-                  color: AppTheme.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   size: 54,
                 ),
                 const SizedBox(height: 16),
@@ -1296,7 +1296,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                   clip.title,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.notoSerif(
-                    color: AppTheme.white,
+                    color: Theme.of(context).colorScheme.onPrimary,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1313,8 +1313,11 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         imageUrl: clip.networkUrl!,
         fit: BoxFit.cover,
         placeholder: (_, _) => const Center(child: CircularProgressIndicator()),
-        errorWidget: (_, _, _) => const Center(
-          child: Icon(Icons.broken_image_outlined, color: AppTheme.white.withValues(alpha: 0.54)),
+        errorWidget: (_, _, _) => Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.54),
+          ),
         ),
       );
     }
@@ -1340,17 +1343,17 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     final TextStyle font = switch (track.fontStyle) {
       'script' => GoogleFonts.dancingScript(
         fontSize: track.fontSize,
-        color: Color(track.colorValue),
+        color: AppTheme.fromCode(track.colorValue),
         fontWeight: FontWeight.bold,
       ),
       'sans' => GoogleFonts.manrope(
         fontSize: track.fontSize,
-        color: Color(track.colorValue),
+        color: AppTheme.fromCode(track.colorValue),
         fontWeight: FontWeight.bold,
       ),
       _ => GoogleFonts.notoSerif(
         fontSize: track.fontSize,
-        color: Color(track.colorValue),
+        color: AppTheme.fromCode(track.colorValue),
         fontWeight: FontWeight.bold,
       ),
     };
@@ -1371,10 +1374,10 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: AppTheme.black.withValues(alpha: 0.45),
+                  color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.45),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: AppTheme.white.withValues(alpha: 0.25),
+                    color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.25),
                   ),
                 ),
                 child: Text(
@@ -1581,7 +1584,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: isSelected
-                                  ? AppTheme.white
+                                  ? Theme.of(context).colorScheme.onPrimary
                                   : theme.colorScheme.primary,
                             ),
                           ),
@@ -1623,7 +1626,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                 decoration: BoxDecoration(
                   color: selected
                       ? theme.colorScheme.primary
-                      : AppTheme.transparentColor,
+                      : AppTheme.transparent(context),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
@@ -1635,7 +1638,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     color: selected
-                        ? AppTheme.white
+                        ? Theme.of(context).colorScheme.onPrimary
                         : theme.colorScheme.onSurface,
                   ),
                 ),
@@ -1705,7 +1708,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                 backgroundColor: theme.colorScheme.primary,
                 child: Text(
                   '${i + 1}',
-                  style: TextStyle(color: AppTheme.white),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
                 ),
               ),
               title: Text(
@@ -1744,9 +1747,9 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                   ),
                   if (_project.clips.length > 1)
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.delete_outline_rounded,
-                        color: AppTheme.dangerRed,
+                        color: theme.colorScheme.error,
                         size: 20,
                       ),
                       onPressed: () {
@@ -1930,9 +1933,9 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                 style: GoogleFonts.manrope(fontSize: 12),
               ),
               trailing: IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.delete_outline_rounded,
-                  color: AppTheme.dangerRed,
+                  color: theme.colorScheme.error,
                 ),
                 onPressed: () {
                   final updated = [..._project.textTracks]..removeAt(i);
@@ -2226,6 +2229,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         ),
         const SizedBox(height: 8),
         for (final track in audioTracks)
+          // ignore: deprecated_member_use
           RadioListTile<String>(
             contentPadding: EdgeInsets.zero,
             title: Text(track.$2, style: GoogleFonts.manrope(fontSize: 13)),

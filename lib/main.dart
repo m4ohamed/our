@@ -128,6 +128,8 @@ class _OurLoveStoryAppState extends ConsumerState<OurLoveStoryApp>
             final title = (data['title'] as String?) ?? 'إشعار جديد 💕';
             final message = (data['message'] as String?) ?? '';
 
+            if (!mounted) return;
+
             HapticFeedback.mediumImpact();
             rootScaffoldMessengerKey.currentState?.showSnackBar(
               SnackBar(

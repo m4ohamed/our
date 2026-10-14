@@ -119,7 +119,7 @@ class FirestoreTimelineRepository implements TimelineRepository {
 
       final snapshot = await _collection!.orderBy('date').get();
       if (snapshot.docs.isEmpty) {
-        return _localCache.getAllEvents();
+        return await _localCache.getAllEvents();
       }
 
       final events = snapshot.docs.map(_docToEntity).toList()
@@ -130,7 +130,7 @@ class FirestoreTimelineRepository implements TimelineRepository {
       }
       return Success(events);
     } catch (_) {
-      return _localCache.getAllEvents();
+      return await _localCache.getAllEvents();
     }
   }
 
@@ -141,11 +141,11 @@ class FirestoreTimelineRepository implements TimelineRepository {
     try {
       final doc = await _collection!.doc(id).get();
       if (!doc.exists || doc.data() == null) {
-        return _localCache.getEventById(id);
+        return await _localCache.getEventById(id);
       }
       return Success(_docToEntity(doc));
     } catch (_) {
-      return _localCache.getEventById(id);
+      return await _localCache.getEventById(id);
     }
   }
 

@@ -8,11 +8,14 @@ class AppColors {
   // Light — Rose & Amethyst Romance
   static const Color pearlWhite = Color(0xFFFFF7F9);
   static const Color dustyRose = Color(0xFFF43F5E);
+  static const Color primaryRoseDark = Color(0xFFE11D48);
   static const Color dustyRoseSoft = Color(0xFFFFE4E6);
   static const Color champagneGold = Color(0xFFF59E0B);
   static const Color champagneGoldSoft = Color(0xFFFEF3C7);
   static const Color surfaceRose = Color(0xFFFDF2F8);
   static const Color deepMauve = Color(0xFF9333EA);
+  static const Color secondaryPurpleLight = Color(0xFFA855F7);
+  static const Color secondaryPurpleDark = Color(0xFF7E22CE);
   static const Color deepMauveSoft = Color(0xFFF3E8FF);
   static const Color darkText = Color(0xFF1F2937);
   static const Color lightText = Color(0xFF6B7280);
@@ -29,6 +32,11 @@ class AppColors {
   static const Color darkPurpleAccent = Color(0xFFC084FC);
   static const Color darkText2 = Color(0xFFFDF2F8);
   static const Color darkLightText = Color(0xFFCBD5E1);
+
+  // Studio Dark Surfaces
+  static const Color studioCanvasBg = Color(0xFF14080A);
+  static const Color studioClipBg1 = Color(0xFF7D5C7E);
+  static const Color studioClipBg2 = Color(0xFF2A1215);
 
   // Semantic Colors
   static const Color error = Color(0xFFEF4444);
@@ -69,6 +77,9 @@ class AppTheme {
 
   static Color warningColor(BuildContext context) => AppColors.warning;
 
+  static Color errorColor(BuildContext context) =>
+      Theme.of(context).colorScheme.error;
+
   static Color cardSurface(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return isDark ? AppColors.darkCard : AppColors.white;
@@ -102,24 +113,53 @@ class AppTheme {
     AppColors.pinkVibrant,
   ];
 
+  static List<Color> speedPadGradient({required bool isSecondPartner}) =>
+      isSecondPartner
+          ? const [AppColors.secondaryPurpleLight, AppColors.secondaryPurpleDark]
+          : const [AppColors.dustyRose, AppColors.primaryRoseDark];
+
+  static List<Color> studioCardGradient(int cardColorValue) => [
+    Color(cardColorValue),
+    AppColors.studioClipBg1,
+    AppColors.studioClipBg2,
+  ];
+
   static List<Color> studioPalette() => AppColors.wheelPalette;
 
   static Color fromCode(int code) => Color(code);
+
+  // Centralized integer color codes for serializable models (RewardWheelItem, SpeedEvents)
+  static const int rewardRoseCode = 0xFFF43F5E;
+  static const int rewardPurpleCode = 0xFF9333EA;
+  static const int rewardPinkCode = 0xFFEC4899;
+  static const int rewardBlueCode = 0xFF3B82F6;
+  static const int rewardGreenCode = 0xFF10B981;
+  static const int rewardAmberCode = 0xFFF59E0B;
+  static const int dangerRedCode = 0xFFEF4444;
+
+  static const List<int> rewardColorCodes = [
+    rewardRoseCode,
+    rewardPurpleCode,
+    rewardGreenCode,
+    rewardBlueCode,
+    rewardAmberCode,
+    rewardPinkCode,
+  ];
+
   static const Color white = AppColors.white;
   static const Color black = AppColors.black;
   static const Color transparentColor = Color(0x00000000);
   static const Color primaryRose = AppColors.dustyRose;
-  static const Color primaryRoseDark = Color(0xFFE11D48);
+  static const Color primaryRoseDark = AppColors.primaryRoseDark;
   static const Color secondaryPurple = AppColors.deepMauve;
-  static const Color secondaryPurpleLight = Color(0xFFA855F7);
-  static const Color secondaryPurpleDark = Color(0xFF7E22CE);
+  static const Color secondaryPurpleLight = AppColors.secondaryPurpleLight;
+  static const Color secondaryPurpleDark = AppColors.secondaryPurpleDark;
   static const Color emeraldGreen = AppColors.success;
   static const Color amberGold = AppColors.warning;
   static const Color dangerRed = AppColors.error;
-  static const Color studioCanvasBg = Color(0xFF14080A);
-  static const Color studioClipBg1 = Color(0xFF7D5C7E);
-  static const Color studioClipBg2 = Color(0xFF2A1215);
-
+  static const Color studioCanvasBg = AppColors.studioCanvasBg;
+  static const Color studioClipBg1 = AppColors.studioClipBg1;
+  static const Color studioClipBg2 = AppColors.studioClipBg2;
 
   // ─── Light & Dark ThemeData ────────────────────────────────────────────────
 

@@ -58,7 +58,10 @@ class _MemoriesAlbumScreenState extends ConsumerState<MemoriesAlbumScreen> {
         onPressed: () => _showAddMemorySheet(s),
         backgroundColor: Theme.of(context).colorScheme.primary,
         elevation: 4,
-        icon: Icon(Icons.add_a_photo_rounded, color: Theme.of(context).colorScheme.onPrimary),
+        icon: Icon(
+          Icons.add_a_photo_rounded,
+          color: Theme.of(context).colorScheme.onPrimary,
+        ),
         label: Text(
           s.addMemory,
           style: GoogleFonts.manrope(
@@ -79,7 +82,8 @@ class _MemoriesAlbumScreenState extends ConsumerState<MemoriesAlbumScreen> {
           color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
+      backgroundColor:
+          Theme.of(context).colorScheme.surface.withValues(alpha: 0),
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new, size: 20),
@@ -432,7 +436,9 @@ class _MemoriesAlbumScreenState extends ConsumerState<MemoriesAlbumScreen> {
               Navigator.pop(context);
               await ref.read(mediaProvider.notifier).deleteMedia(item.id);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: Text(s.delete),
           ),
         ],
@@ -444,7 +450,8 @@ class _MemoriesAlbumScreenState extends ConsumerState<MemoriesAlbumScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
+      backgroundColor:
+          Theme.of(context).colorScheme.surface.withValues(alpha: 0),
       builder: (_) => _AddMemorySheet(
         onSave: (media) async {
           await ref.read(mediaProvider.notifier).addMedia(media);
@@ -631,7 +638,8 @@ class _AddMemorySheetState extends State<_AddMemorySheet> {
                       right: 8,
                       child: IconButton.filled(
                         style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.scrim.withValues(alpha: 0.54),
+                          backgroundColor:
+                              theme.colorScheme.scrim.withValues(alpha: 0.54),
                         ),
                         icon: Icon(
                           Icons.close_rounded,
@@ -711,7 +719,9 @@ class _AddMemorySheetState extends State<_AddMemorySheet> {
                     firstDate: DateTime(2020),
                     lastDate: DateTime(2035),
                   );
-                  if (picked != null) setState(() => _date = picked);
+                  if (picked != null && mounted) {
+                    setState(() => _date = picked);
+                  }
                 },
               ),
               const SizedBox(height: 20),
@@ -720,11 +730,11 @@ class _AddMemorySheetState extends State<_AddMemorySheet> {
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : _save,
                   child: _isSaving
-                      ? const SizedBox.square(
+                      ? SizedBox.square(
                           dimension: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.onPrimary,
+                            color: theme.colorScheme.onPrimary,
                           ),
                         )
                       : Text(s.addMemory),
@@ -814,7 +824,9 @@ class _MediaCard extends StatelessWidget {
                     if (media.mediaType == MediaType.video)
                       Positioned.fill(
                         child: Container(
-                          color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.26),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.scrim.withValues(alpha: 0.26),
                           child: Center(
                             child: Icon(
                               Icons.play_circle_fill_rounded,
@@ -834,7 +846,9 @@ class _MediaCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: media.isFeatured
                                 ? Theme.of(context).colorScheme.secondary
-                                : Theme.of(context).colorScheme.scrim.withValues(alpha: 0.38),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.scrim.withValues(alpha: 0.38),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
@@ -942,15 +956,23 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
       backgroundColor: Theme.of(context).colorScheme.scrim,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0),
+        backgroundColor:
+            Theme.of(context).colorScheme.surface.withValues(alpha: 0),
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.close_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 28),
+          icon: Icon(
+            Icons.close_rounded,
+            color: Theme.of(context).colorScheme.onPrimary,
+            size: 28,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           '${_currentIndex + 1} / ${_items.length}',
-          style: GoogleFonts.manrope(color: Theme.of(context).colorScheme.onPrimary, fontSize: 16),
+          style: GoogleFonts.manrope(
+            color: Theme.of(context).colorScheme.onPrimary,
+            fontSize: 16,
+          ),
         ),
         actions: [
           IconButton(
@@ -958,10 +980,13 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
               current.isFeatured
                   ? Icons.star_rounded
                   : Icons.star_border_rounded,
-              color: current.isFeatured ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.onPrimary,
+              color: current.isFeatured
+                  ? Theme.of(context).colorScheme.secondary
+                  : Theme.of(context).colorScheme.onPrimary,
             ),
             onPressed: () async {
               await ref.read(mediaProvider.notifier).toggleFeatured(current.id);
+              if (!mounted) return;
               setState(() {
                 _items[_currentIndex] = current.copyWith(
                   isFeatured: !current.isFeatured,
@@ -1033,8 +1058,12 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
                         begin: Alignment.bottomCenter,
                         end: Alignment.topCenter,
                         colors: [
-                          Theme.of(context).colorScheme.scrim.withValues(alpha: 0.8),
-                          Theme.of(context).colorScheme.surface.withValues(alpha: 0),
+                          Theme.of(
+                            context,
+                          ).colorScheme.scrim.withValues(alpha: 0.8),
+                          Theme.of(
+                            context,
+                          ).colorScheme.surface.withValues(alpha: 0),
                         ],
                       ),
                     ),
@@ -1062,7 +1091,9 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
                             Text(
                               '${current.uploadDate.day}/${current.uploadDate.month}/${current.uploadDate.year}',
                               style: GoogleFonts.manrope(
-                                color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimary.withValues(alpha: 0.7),
                                 fontSize: 13,
                               ),
                             ),
@@ -1078,7 +1109,10 @@ class _FullScreenGalleryState extends ConsumerState<FullScreenGallery> {
                                 child: Text(
                                   current.location!,
                                   style: GoogleFonts.manrope(
-                                    color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimary
+                                        .withValues(alpha: 0.7),
                                     fontSize: 13,
                                   ),
                                 ),

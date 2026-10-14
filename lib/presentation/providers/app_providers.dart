@@ -180,9 +180,38 @@ class SettingsNotifier extends AsyncNotifier<AppSettingsEntity> {
   Future<void> toggleDemoData() async {
     final current = state.value;
     if (current == null) return;
-    await saveSettings(
-      current.copyWith(enableDemoData: !current.enableDemoData),
-    );
+    final nextEnable = !current.enableDemoData;
+    final prefs = ref.read(sharedPreferencesProvider);
+
+    if (nextEnable) {
+      await prefs.setBool(AppConstants.keyDemoEventsSeeded, false);
+      await prefs.setBool(AppConstants.keyDemoMediaSeeded, false);
+    } else {
+      await prefs.setBool(AppConstants.keyDemoEventsSeeded, true);
+      await prefs.setBool(AppConstants.keyDemoMediaSeeded, true);
+      final eventsBox = ref.read(hiveEventsBoxProvider);
+      final demoEventIds = eventsBox.values
+          .where((m) => m.isDemo || m.id.startsWith('demo_'))
+          .map((m) => m.id)
+          .toList();
+      final timelineRepo = ref.read(timelineRepositoryProvider);
+      for (final id in demoEventIds) {
+        await timelineRepo.deleteEvent(id);
+      }
+
+      final mediaBox = ref.read(hiveMediaBoxProvider);
+      final demoMediaIds = mediaBox.values
+          .where((m) => m.id.startsWith('demo_'))
+          .map((m) => m.id)
+          .toList();
+      final mediaRepo = ref.read(mediaRepositoryProvider);
+      for (final id in demoMediaIds) {
+        await mediaRepo.deleteMedia(id);
+      }
+    }
+
+    await saveSettings(current.copyWith(enableDemoData: nextEnable));
+    ref.invalidate(timelineProvider);
   }
 
   Future<void> setThemeMode(AppThemeMode mode) async {

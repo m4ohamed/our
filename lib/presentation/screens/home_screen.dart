@@ -7,6 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../generated/l10n.dart';
 import '../providers/app_providers.dart';
 import '../../core/widgets/glass_container.dart';
+import '../../domain/entities/entities.dart';
+import '../../domain/entities/timeline_event_entity.dart';
 import '../../theme/app_theme.dart';
 import 'baby_countdown_screen.dart';
 import 'countdown_screen.dart';
@@ -74,7 +76,6 @@ class HomeScreen extends ConsumerWidget {
     final myRole = ref.watch(myPartnerRoleProvider);
     final coupleDocAsync = ref.watch(coupleOnlineDocStreamProvider);
     final isFirestoreConnected = ref.watch(firestoreInstanceProvider) != null;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final data = coupleDocAsync.value;
     final partnerRole = myRole == 'p1' ? 'p2' : 'p1';
@@ -141,7 +142,12 @@ class HomeScreen extends ConsumerWidget {
                         ? AppTheme.successColor(context)
                         : AppTheme.warningColor(context)),
               boxShadow: partnerOnline
-                  ? [BoxShadow(color: AppTheme.successColor(context), blurRadius: 6)]
+                  ? [
+                      BoxShadow(
+                        color: AppTheme.successColor(context),
+                        blurRadius: 6,
+                      ),
+                    ]
                   : null,
             ),
           ),
@@ -171,17 +177,16 @@ class HomeScreen extends ConsumerWidget {
                 message: '$myName يفكر فيكِ الآن ويرسل لكِ قبلة دافئة 💋✨',
                 category: 'love_pulse',
               );
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '🔔 تم إرسال نبضة شوق وإشعار فوري إلى $partnerName 💕',
-                      style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
-                    ),
-                    backgroundColor: Theme.of(context).colorScheme.primary,
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '🔔 تم إرسال نبضة شوق وإشعار فوري إلى $partnerName 💕',
+                    style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
                   ),
-                );
-              }
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                ),
+              );
             },
             borderRadius: BorderRadius.circular(12),
             child: Container(
@@ -373,7 +378,7 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildReminderBanner(
     BuildContext context,
-    dynamic milestone,
+    TimelineEventEntity milestone,
     S s,
   ) {
     final theme = Theme.of(context);

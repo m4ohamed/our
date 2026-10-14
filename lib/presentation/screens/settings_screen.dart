@@ -420,7 +420,7 @@ class _SettingsBody extends ConsumerWidget {
                     MaterialPageRoute(builder: (_) => const PinSetupScreen()),
                   );
                 } else {
-                  notifier.saveSettings(
+                  await notifier.saveSettings(
                     settings.copyWith(
                       pinEnabled: false,
                       pinHash: null,
@@ -466,7 +466,11 @@ class _SettingsBody extends ConsumerWidget {
               thumbColor: WidgetStatePropertyAll(
                 Theme.of(context).colorScheme.primary,
               ),
-              onChanged: (_) => notifier.toggleDemoData(),
+              onChanged: (_) async {
+                await notifier.toggleDemoData();
+                ref.invalidate(timelineProvider);
+                ref.invalidate(mediaProvider);
+              },
             ),
             ListTile(
               leading: Icon(
@@ -475,7 +479,9 @@ class _SettingsBody extends ConsumerWidget {
               ),
               title: Text(
                 s.deleteAllData,
-                style: GoogleFonts.cairo(color: Theme.of(context).colorScheme.error),
+                style: GoogleFonts.cairo(
+                  color: Theme.of(context).colorScheme.error,
+                ),
               ),
               subtitle: Text(
                 s.resetAppCompletely,
@@ -579,16 +585,15 @@ class _SettingsBody extends ConsumerWidget {
         .updateOnlinePresence(isOnline: true);
     ref.invalidate(timelineProvider);
     ref.invalidate(mediaProvider);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            '✅ تمت مزامنة كافة البيانات أونلاين بنجاح مع Cloud Firestore!',
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          '✅ تمت مزامنة كافة البيانات أونلاين بنجاح مع Cloud Firestore!',
         ),
-      );
-    }
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ),
+    );
   }
 
   Future<void> _sendTestNotification(
@@ -598,21 +603,21 @@ class _SettingsBody extends ConsumerWidget {
     final oneSignal = ref.read(oneSignalServiceProvider);
     final ok = await oneSignal.sendNotificationToPartner(
       title: 'إشعار حب من ${oneSignal.myName} 💖',
-      message: 'أحبكِ يا ${oneSignal.partnerName}! تم تفعيل الإشعارات الفورية بين هاتفينا 🔔✨',
+      message:
+          'أحبكِ يا ${oneSignal.partnerName}! تم تفعيل الإشعارات الفورية بين هاتفينا 🔔✨',
       category: 'test',
     );
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            ok
-                ? '🔔 تم إرسال الإشعار الفوري إلى هاتف ${oneSignal.partnerName} بنجاح!'
-                : '⚠️ تعذر إرسال الإشعار، تحقق من الاتصال أو مفاتيح OneSignal',
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? '🔔 تم إرسال الإشعار الفوري إلى هاتف ${oneSignal.partnerName} بنجاح!'
+              : '⚠️ تعذر إرسال الإشعار، تحقق من الاتصال أو مفاتيح OneSignal',
         ),
-      );
-    }
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ),
+    );
   }
 
   void _showOneSignalDialog(BuildContext context, WidgetRef ref, S s) {
@@ -624,7 +629,7 @@ class _SettingsBody extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: Theme.of(ctx).colorScheme.surface,
         title: Text(
           '🔔 إعداد إشعارات OneSignal',
           style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 18),
@@ -668,17 +673,17 @@ class _SettingsBody extends ConsumerWidget {
                 restApiKey: apiKeyCtrl.text,
               );
               ref.invalidate(oneSignalServiceProvider);
-              if (ctx.mounted) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text(
-                      '✅ تم حفظ وتفعيل إشعارات OneSignal بنجاح!',
-                    ),
-                    backgroundColor: Theme.of(context).colorScheme.primary,
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text(
+                    '✅ تم حفظ وتفعيل إشعارات OneSignal بنجاح!',
                   ),
-                );
-              }
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                ),
+              );
             },
             child: Text(s.save),
           ),
@@ -696,7 +701,7 @@ class _SettingsBody extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: Theme.of(ctx).colorScheme.surface,
         title: Text(
           'إعداد Cloudinary',
           style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
@@ -747,12 +752,15 @@ class _SettingsBody extends ConsumerWidget {
   void _confirmReset(BuildContext context, WidgetRef ref, S s) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: Theme.of(dialogCtx).colorScheme.surface,
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Theme.of(dialogCtx).colorScheme.error,
+            ),
             const SizedBox(width: 8),
             Text(
               s.confirmReset,
@@ -763,25 +771,26 @@ class _SettingsBody extends ConsumerWidget {
         content: Text(s.areYouSureDeleteAll, style: GoogleFonts.cairo()),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: Text(s.cancel),
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogCtx);
               await ref.read(settingsProvider.notifier).reset();
               await ref.read(timelineProvider.notifier).deleteAll();
               await ref.read(mediaProvider.notifier).deleteAll();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(s.dataCleared),
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                  ),
-                );
-              }
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(s.dataCleared),
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                ),
+              );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(dialogCtx).colorScheme.error,
+            ),
             child: Text(s.delete),
           ),
         ],

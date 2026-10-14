@@ -123,7 +123,7 @@ class FirestoreMediaRepository implements MediaRepository {
           .get();
 
       if (snapshot.docs.isEmpty) {
-        return _localCache.getAllMedia();
+        return await _localCache.getAllMedia();
       }
 
       final media = snapshot.docs.map(_docToEntity).toList();
@@ -132,7 +132,7 @@ class FirestoreMediaRepository implements MediaRepository {
       }
       return Success(media);
     } catch (_) {
-      return _localCache.getAllMedia();
+      return await _localCache.getAllMedia();
     }
   }
 
@@ -143,11 +143,11 @@ class FirestoreMediaRepository implements MediaRepository {
     try {
       final doc = await _collection!.doc(id).get();
       if (!doc.exists || doc.data() == null) {
-        return _localCache.getMediaById(id);
+        return await _localCache.getMediaById(id);
       }
       return Success(_docToEntity(doc));
     } catch (_) {
-      return _localCache.getMediaById(id);
+      return await _localCache.getMediaById(id);
     }
   }
 

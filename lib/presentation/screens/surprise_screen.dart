@@ -243,8 +243,10 @@ class _SurpriseScreenState extends ConsumerState<SurpriseScreen>
                 category: 'surprise',
               );
 
-              if (mounted) {
+              if (ctx.mounted) {
                 Navigator.pop(ctx);
+              }
+              if (mounted) {
                 setState(() {
                   _currentMessage = text;
                 });
