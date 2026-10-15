@@ -4,11 +4,11 @@
 // 1. نظام التوقيت الصحيح الخالي من الانجراف (Exact Integer Ticks: 254,016,000,000 ticks/sec)
 // 2. استيفاء الـ Keyframes المتقدم (Hold, Linear, Cubic Bezier, Auto-Bezier Catmull-Rom, Elastic)
 // 3. مصفوفات تصحيح الألوان السينمائية (Lumetri-style Procedural Color Grading Matrix)
-// 4. دمج الإطارات وتوليد حاوية الفيديو القياسية RIFF/AVI عبر C-ABI FFI
+// 4. دمج الإطارات وتوليد حاوية الفيديو القياسية RIFF/AVI عبر C-ABI FFI باستخدام الكتابة المخزنة (BufWriter)
 
 use std::f64::consts::PI;
 use std::fs::File;
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{BufWriter, Write};
 use std::slice;
 
 /// عدد النبضات الزمنية في الثانية الواحدة كما في محرك FilmCraft
@@ -241,13 +241,28 @@ fn write_avi_container(
     height: u32,
     fps: u32,
 ) -> std::io::Result<()> {
-    let mut f = File::create(path)?;
+    let file = File::create(path)?;
+    let mut f = BufWriter::with_capacity(256 * 1024, file);
     let num_frames = sizes.len() as u32;
     let usec_per_frame = if fps > 0 { 1_000_000 / fps } else { 66_666 };
+    let frame_buffer_size = width.saturating_mul(height).saturating_mul(4);
+    let max_bytes_per_sec = frame_buffer_size.saturating_mul(fps);
+
+    let mut movi_payload_bytes: u32 = 4;
+    for &sz in sizes {
+        movi_payload_bytes = movi_payload_bytes
+            .saturating_add(8)
+            .saturating_add(sz)
+            .saturating_add(sz % 2);
+    }
+    let idx1_bytes = (sizes.len() as u32).saturating_mul(16);
+    let riff_size = 4u32
+        .saturating_add(8 + 192)
+        .saturating_add(8 + movi_payload_bytes)
+        .saturating_add(8 + idx1_bytes);
 
     f.write_all(b"RIFF")?;
-    let riff_size_pos = f.stream_position()?;
-    f.write_all(&0u32.to_le_bytes())?;
+    f.write_all(&riff_size.to_le_bytes())?;
     f.write_all(b"AVI ")?;
 
     f.write_all(b"LIST")?;
@@ -257,13 +272,13 @@ fn write_avi_container(
     f.write_all(b"avih")?;
     f.write_all(&56u32.to_le_bytes())?;
     f.write_all(&usec_per_frame.to_le_bytes())?;
-    f.write_all(&(width * height * 3 * fps).to_le_bytes())?;
+    f.write_all(&max_bytes_per_sec.to_le_bytes())?;
     f.write_all(&0u32.to_le_bytes())?;
     f.write_all(&0x10u32.to_le_bytes())?;
     f.write_all(&num_frames.to_le_bytes())?;
     f.write_all(&0u32.to_le_bytes())?;
     f.write_all(&1u32.to_le_bytes())?;
-    f.write_all(&(width * height * 4).to_le_bytes())?;
+    f.write_all(&frame_buffer_size.to_le_bytes())?;
     f.write_all(&width.to_le_bytes())?;
     f.write_all(&height.to_le_bytes())?;
     f.write_all(&[0u8; 16])?;
@@ -284,7 +299,7 @@ fn write_avi_container(
     f.write_all(&fps.to_le_bytes())?;
     f.write_all(&0u32.to_le_bytes())?;
     f.write_all(&num_frames.to_le_bytes())?;
-    f.write_all(&(width * height * 4).to_le_bytes())?;
+    f.write_all(&frame_buffer_size.to_le_bytes())?;
     f.write_all(&0xFFFFFFFFu32.to_le_bytes())?;
     f.write_all(&0u32.to_le_bytes())?;
     f.write_all(&0u16.to_le_bytes())?;
@@ -300,20 +315,18 @@ fn write_avi_container(
     f.write_all(&1u16.to_le_bytes())?;
     f.write_all(&32u16.to_le_bytes())?;
     f.write_all(b"MPNG")?;
-    f.write_all(&(width * height * 4).to_le_bytes())?;
+    f.write_all(&frame_buffer_size.to_le_bytes())?;
     f.write_all(&[0u8; 16])?;
 
     f.write_all(b"LIST")?;
-    let movi_size_pos = f.stream_position()?;
-    f.write_all(&0u32.to_le_bytes())?;
-    let movi_start = f.stream_position()?;
+    f.write_all(&movi_payload_bytes.to_le_bytes())?;
     f.write_all(b"movi")?;
 
     let mut offsets = Vec::with_capacity(sizes.len());
+    let mut current_chunk_offset = 4u32;
     let mut cursor = 0usize;
     for &sz in sizes {
-        let chunk_pos = f.stream_position()? - movi_start;
-        offsets.push((chunk_pos as u32, sz));
+        offsets.push((current_chunk_offset, sz));
         f.write_all(b"00dc")?;
         f.write_all(&sz.to_le_bytes())?;
         let end = cursor + (sz as usize);
@@ -322,11 +335,14 @@ fn write_avi_container(
             f.write_all(&[0u8])?;
         }
         cursor = end;
+        current_chunk_offset = current_chunk_offset
+            .saturating_add(8)
+            .saturating_add(sz)
+            .saturating_add(sz % 2);
     }
-    let movi_end = f.stream_position()?;
 
     f.write_all(b"idx1")?;
-    f.write_all(&((offsets.len() * 16) as u32).to_le_bytes())?;
+    f.write_all(&idx1_bytes.to_le_bytes())?;
     for (offset, sz) in offsets {
         f.write_all(b"00dc")?;
         f.write_all(&0x10u32.to_le_bytes())?;
@@ -334,10 +350,6 @@ fn write_avi_container(
         f.write_all(&sz.to_le_bytes())?;
     }
 
-    let file_end = f.stream_position()?;
-    f.seek(SeekFrom::Start(riff_size_pos))?;
-    f.write_all(&((file_end - 8) as u32).to_le_bytes())?;
-    f.seek(SeekFrom::Start(movi_size_pos))?;
-    f.write_all(&((movi_end - movi_start) as u32).to_le_bytes())?;
+    f.flush()?;
     Ok(())
 }

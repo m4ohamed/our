@@ -387,6 +387,69 @@ class VideoTextTrack {
   );
 }
 
+/// مسار صوتي إضافي أو مؤثر صوتي على خط الزمن (Timeline Audio / Sound Effect)
+@immutable
+class VideoAudioTrack {
+  final String id;
+  final String title;
+  final String sourcePath;
+  final bool isLocalFile;
+  final double startTime;
+  final double durationSeconds;
+  final double volume;
+
+  const VideoAudioTrack({
+    required this.id,
+    required this.title,
+    required this.sourcePath,
+    this.isLocalFile = false,
+    this.startTime = 0.0,
+    this.durationSeconds = 4.0,
+    this.volume = 0.9,
+  });
+
+  VideoAudioTrack copyWith({
+    String? id,
+    String? title,
+    String? sourcePath,
+    bool? isLocalFile,
+    double? startTime,
+    double? durationSeconds,
+    double? volume,
+  }) {
+    return VideoAudioTrack(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      sourcePath: sourcePath ?? this.sourcePath,
+      isLocalFile: isLocalFile ?? this.isLocalFile,
+      startTime: startTime ?? this.startTime,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
+      volume: volume ?? this.volume,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'sourcePath': sourcePath,
+    'isLocalFile': isLocalFile,
+    'startTime': startTime,
+    'durationSeconds': durationSeconds,
+    'volume': volume,
+  };
+
+  factory VideoAudioTrack.fromJson(Map<String, dynamic> json) =>
+      VideoAudioTrack(
+        id: (json['id'] as String?) ?? '',
+        title: (json['title'] as String?) ?? 'مؤثر صوتي',
+        sourcePath: (json['sourcePath'] as String?) ?? '',
+        isLocalFile: (json['isLocalFile'] as bool?) ?? false,
+        startTime: (json['startTime'] as num?)?.toDouble() ?? 0.0,
+        durationSeconds: (json['durationSeconds'] as num?)?.toDouble() ?? 4.0,
+        volume: (json['volume'] as num?)?.toDouble() ?? 0.9,
+      );
+}
+
 @immutable
 class VideoProjectEntity {
   final String id;
@@ -396,6 +459,13 @@ class VideoProjectEntity {
   final List<VideoTextTrack> textTracks;
   final LumetriColorGrade colorGrade;
   final String? audioAsset;
+  final String? customAudioPath;
+  final String? customAudioName;
+  final double audioVolume;
+  final double audioStartOffset;
+  final bool audioFadeIn;
+  final bool audioFadeOut;
+  final List<VideoAudioTrack> soundEffects;
   final DateTime createdAt;
 
   const VideoProjectEntity({
@@ -406,6 +476,13 @@ class VideoProjectEntity {
     this.textTracks = const [],
     this.colorGrade = const LumetriColorGrade(),
     this.audioAsset,
+    this.customAudioPath,
+    this.customAudioName,
+    this.audioVolume = 0.85,
+    this.audioStartOffset = 0.0,
+    this.audioFadeIn = true,
+    this.audioFadeOut = true,
+    this.soundEffects = const [],
     required this.createdAt,
   });
 
@@ -420,6 +497,10 @@ class VideoProjectEntity {
     VideoAspectRatioPreset.landscape16x9 => 16 / 9,
   };
 
+  bool get hasBackgroundAudio =>
+      (customAudioPath != null && customAudioPath!.isNotEmpty) ||
+      (audioAsset != null && audioAsset!.isNotEmpty);
+
   VideoProjectEntity copyWith({
     String? id,
     String? title,
@@ -428,6 +509,15 @@ class VideoProjectEntity {
     List<VideoTextTrack>? textTracks,
     LumetriColorGrade? colorGrade,
     String? audioAsset,
+    bool clearAudioAsset = false,
+    String? customAudioPath,
+    bool clearCustomAudio = false,
+    String? customAudioName,
+    double? audioVolume,
+    double? audioStartOffset,
+    bool? audioFadeIn,
+    bool? audioFadeOut,
+    List<VideoAudioTrack>? soundEffects,
     DateTime? createdAt,
   }) {
     return VideoProjectEntity(
@@ -437,7 +527,18 @@ class VideoProjectEntity {
       clips: clips ?? this.clips,
       textTracks: textTracks ?? this.textTracks,
       colorGrade: colorGrade ?? this.colorGrade,
-      audioAsset: audioAsset ?? this.audioAsset,
+      audioAsset: clearAudioAsset ? null : (audioAsset ?? this.audioAsset),
+      customAudioPath: clearCustomAudio
+          ? null
+          : (customAudioPath ?? this.customAudioPath),
+      customAudioName: clearCustomAudio
+          ? null
+          : (customAudioName ?? this.customAudioName),
+      audioVolume: audioVolume ?? this.audioVolume,
+      audioStartOffset: audioStartOffset ?? this.audioStartOffset,
+      audioFadeIn: audioFadeIn ?? this.audioFadeIn,
+      audioFadeOut: audioFadeOut ?? this.audioFadeOut,
+      soundEffects: soundEffects ?? this.soundEffects,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -450,6 +551,13 @@ class VideoProjectEntity {
     'textTracks': textTracks.map((t) => t.toJson()).toList(),
     'colorGrade': colorGrade.toJson(),
     'audioAsset': audioAsset,
+    'customAudioPath': customAudioPath,
+    'customAudioName': customAudioName,
+    'audioVolume': audioVolume,
+    'audioStartOffset': audioStartOffset,
+    'audioFadeIn': audioFadeIn,
+    'audioFadeOut': audioFadeOut,
+    'soundEffects': soundEffects.map((s) => s.toJson()).toList(),
     'createdAt': createdAt.toIso8601String(),
   };
 
@@ -479,6 +587,20 @@ class VideoProjectEntity {
               )
             : const LumetriColorGrade(),
         audioAsset: json['audioAsset'] as String?,
+        customAudioPath: json['customAudioPath'] as String?,
+        customAudioName: json['customAudioName'] as String?,
+        audioVolume: (json['audioVolume'] as num?)?.toDouble() ?? 0.85,
+        audioStartOffset:
+            (json['audioStartOffset'] as num?)?.toDouble() ?? 0.0,
+        audioFadeIn: (json['audioFadeIn'] as bool?) ?? true,
+        audioFadeOut: (json['audioFadeOut'] as bool?) ?? true,
+        soundEffects:
+            (json['soundEffects'] as List?)
+                ?.map(
+                  (s) => VideoAudioTrack.fromJson(Map<String, dynamic>.from(s)),
+                )
+                .toList() ??
+            const [],
         createdAt:
             DateTime.tryParse((json['createdAt'] as String?) ?? '') ??
             DateTime.now(),
