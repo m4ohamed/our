@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'dart:io';
 import 'dart:math' as math;
-import 'package:flutter/services.dart';
+import 'dart:typed_data';
+import 'package:flutter/services.dart' show MethodChannel, rootBundle;
 import 'package:path_provider/path_provider.dart';
 
 import '../../domain/entities/video_project_entity.dart';

@@ -48,20 +48,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         settings.pinHash != null &&
         settings.pinHash!.isNotEmpty;
 
-    final Widget targetScreen = shouldRequirePin
-        ? PinVerifyScreen(
-            onVerified: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const HomeScreen()),
-              );
-            },
-          )
-        : const HomeScreen();
-
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, _, _) => targetScreen,
+        pageBuilder: (routeContext, _, _) => shouldRequirePin
+            ? PinVerifyScreen(
+                onVerified: () {
+                  Navigator.of(routeContext).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const HomeScreen()),
+                  );
+                },
+              )
+            : const HomeScreen(),
         transitionsBuilder: (_, anim, _, child) =>
             FadeTransition(opacity: anim, child: child),
         transitionDuration: const Duration(milliseconds: 800),

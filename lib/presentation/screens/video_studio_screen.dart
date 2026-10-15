@@ -3,19 +3,20 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:video_player/video_player.dart';
+import 'package:video_player/video_player.dart' hide VideoAudioTrack;
 
 import '../../core/constants/app_constants.dart';
 import '../../core/services/rust_video_bridge.dart';
@@ -1436,10 +1437,13 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         final uploadRes = await cloudinary.uploadVideo(
           File(bundle.videoFilePath),
         );
-        if (uploadRes.isSuccess) {
-          cloudVideoUrl = uploadRes.data.secureUrl;
-          cloudThumbUrl = uploadRes.data.thumbnailUrl;
-        }
+        uploadRes.when(
+          success: (data) {
+            cloudVideoUrl = data.secureUrl;
+            cloudThumbUrl = data.thumbnailUrl;
+          },
+          failure: (_) {},
+        );
       }
 
       final mediaItem = MediaFileEntity(
@@ -4467,7 +4471,6 @@ class _ExportedVideoPlayerDialogState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Row(

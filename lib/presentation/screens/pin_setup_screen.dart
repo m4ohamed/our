@@ -10,6 +10,7 @@ import 'package:local_auth/local_auth.dart';
 import '../../generated/l10n.dart';
 
 import '../providers/app_providers.dart';
+import 'home_screen.dart';
 
 class PinSetupScreen extends ConsumerStatefulWidget {
   const PinSetupScreen({super.key});
@@ -67,12 +68,10 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
     }
 
     final hash = sha256.convert(utf8.encode(_pin)).toString();
-    final settings = ref.read(settingsProvider).value;
-    if (settings != null) {
-      await ref
-          .read(settingsProvider.notifier)
-          .saveSettings(settings.copyWith(pinEnabled: true, pinHash: hash));
-    }
+    final settings = await ref.read(settingsProvider.future);
+    await ref
+        .read(settingsProvider.notifier)
+        .saveSettings(settings.copyWith(pinEnabled: true, pinHash: hash));
 
     if (mounted) Navigator.pop(context, true);
   }
@@ -190,7 +189,9 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: d == '⌫'
-                            ? Theme.of(context).colorScheme.surface.withValues(alpha: 0)
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.surface.withValues(alpha: 0)
                             : Theme.of(
                                 context,
                               ).colorScheme.surfaceContainerHighest,
@@ -233,9 +234,9 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
 // ─── PIN Verify Screen ────────────────────────────────────────────────────────
 
 class PinVerifyScreen extends ConsumerStatefulWidget {
-  final VoidCallback onVerified;
+  final VoidCallback? onVerified;
 
-  const PinVerifyScreen({super.key, required this.onVerified});
+  const PinVerifyScreen({super.key, this.onVerified});
 
   @override
   ConsumerState<PinVerifyScreen> createState() => _PinVerifyScreenState();
@@ -248,6 +249,7 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
   int _attempts = 0;
   int _lockoutSeconds = 0;
   Timer? _lockoutTimer;
+  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -263,14 +265,26 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
     super.dispose();
   }
 
+  /// الانتقال الآمن إلى الشاشة الرئيسية عند نجاح التحقق بالـ PIN أو البصمة
+  /// يستخدم الـ BuildContext الحي الخاص بـ PinVerifyScreen لتجنب مشكلة
+  /// استخدام context قديم تم التخلص منه (deactivated) من شاشة SplashScreen.
+  void _unlockAndNavigateHome() {
+    if (!mounted || _isNavigating) return;
+    _isNavigating = true;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
+  }
+
   Future<void> _tryBiometricIfEnabled() async {
-    final settings = ref.read(settingsProvider).value;
-    if (settings == null || !settings.biometricEnabled) return;
+    final settings = await ref.read(settingsProvider.future);
+    if (!mounted || !settings.biometricEnabled) return;
     await _authenticateWithBiometrics();
   }
 
   Future<void> _authenticateWithBiometrics() async {
-    if (_lockoutSeconds > 0) return;
+    if (_lockoutSeconds > 0 || _isNavigating) return;
     final s = S.of(context);
     try {
       final canCheck = await _localAuth.canCheckBiometrics;
@@ -281,7 +295,7 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
         localizedReason: s.biometricReason,
       );
       if (authenticated && mounted) {
-        widget.onVerified();
+        _unlockAndNavigateHome();
       }
     } catch (_) {}
   }
@@ -309,16 +323,18 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
   }
 
   void _onDigit(String d) {
-    if (_lockoutSeconds > 0 || _pin.length >= 4) return;
+    if (_lockoutSeconds > 0 || _pin.length >= 4 || _isNavigating) return;
     setState(() {
       _pin += d;
       _error = null;
     });
-    if (_pin.length == 4) _verify();
+    if (_pin.length == 4) {
+      _verify();
+    }
   }
 
   void _onDelete() {
-    if (_lockoutSeconds > 0 || _pin.isEmpty) return;
+    if (_lockoutSeconds > 0 || _pin.isEmpty || _isNavigating) return;
     setState(() {
       _pin = _pin.substring(0, _pin.length - 1);
       _error = null;
@@ -326,15 +342,19 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
   }
 
   Future<void> _verify() async {
-    final settings = ref.read(settingsProvider).value;
+    final settings = await ref.read(settingsProvider.future);
+    if (!mounted) return;
     final s = S.of(context);
-    if (settings?.pinHash == null) {
-      widget.onVerified();
+
+    final savedHash = settings.pinHash?.trim();
+    if (savedHash == null || savedHash.isEmpty) {
+      _unlockAndNavigateHome();
       return;
     }
-    final hash = sha256.convert(utf8.encode(_pin)).toString();
-    if (hash == settings!.pinHash) {
-      widget.onVerified();
+
+    final enteredHash = sha256.convert(utf8.encode(_pin.trim())).toString();
+    if (enteredHash == savedHash) {
+      _unlockAndNavigateHome();
     } else {
       _attempts++;
       if (_attempts >= 3) {
@@ -449,7 +469,8 @@ class _PinVerifyScreenState extends ConsumerState<PinVerifyScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: (d == '⌫' || d == 'BIO')
-                                      ? Theme.of(context).colorScheme.surface.withValues(alpha: 0)
+                                      ? Theme.of(context).colorScheme.surface
+                                            .withValues(alpha: 0)
                                       : Theme.of(
                                           context,
                                         ).colorScheme.surfaceContainerHighest,
