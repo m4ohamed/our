@@ -34,9 +34,35 @@ typedef _SecondsToTicksDart = int Function(double seconds);
 typedef _TicksToSecondsNative = ffi.Double Function(ffi.Int64 ticks);
 typedef _TicksToSecondsDart = double Function(int ticks);
 
+typedef _TicksToAudioSampleNative =
+    ffi.Int64 Function(ffi.Int64 ticks, ffi.Uint32 sampleRate);
+typedef _TicksToAudioSampleDart = int Function(int ticks, int sampleRate);
+
 typedef _ApplyEasingNative =
     ffi.Double Function(ffi.Double t, ffi.Int32 easingType);
 typedef _ApplyEasingDart = double Function(double t, int easingType);
+
+typedef _SolveCubicBezier2dNative =
+    ffi.Double Function(
+      ffi.Double x1,
+      ffi.Double y1,
+      ffi.Double x2,
+      ffi.Double y2,
+      ffi.Double t,
+    );
+typedef _SolveCubicBezier2dDart =
+    double Function(double x1, double y1, double x2, double y2, double t);
+
+typedef _CubicBezierEvalNative =
+    ffi.Double Function(
+      ffi.Double p0,
+      ffi.Double p1,
+      ffi.Double p2,
+      ffi.Double p3,
+      ffi.Double t,
+    );
+typedef _CubicBezierEvalDart =
+    double Function(double p0, double p1, double p2, double p3, double t);
 
 typedef _CatmullRomNative =
     ffi.Double Function(
@@ -119,6 +145,46 @@ typedef _BlendRgbaFramesDart =
       double progress,
     );
 
+typedef _RgbaToNv12Native =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> rgbaPtr,
+      ffi.Pointer<ffi.Uint8> nv12OutPtr,
+      ffi.Uint32 width,
+      ffi.Uint32 height,
+    );
+
+typedef _RgbaToNv12Dart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> rgbaPtr,
+      ffi.Pointer<ffi.Uint8> nv12OutPtr,
+      int width,
+      int height,
+    );
+
+typedef _MixPcm16OverlayNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> masterPcmPtr,
+      ffi.Size masterByteLen,
+      ffi.Pointer<ffi.Uint8> overlayPcmPtr,
+      ffi.Size overlayByteLen,
+      ffi.Uint32 sampleRate,
+      ffi.Uint16 channels,
+      ffi.Double startTimeSeconds,
+      ffi.Double overlayVolume,
+    );
+
+typedef _MixPcm16OverlayDart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> masterPcmPtr,
+      int masterByteLen,
+      ffi.Pointer<ffi.Uint8> overlayPcmPtr,
+      int overlayByteLen,
+      int sampleRate,
+      int channels,
+      double startTimeSeconds,
+      double overlayVolume,
+    );
+
 typedef _MuxFramesToAviNative =
     ffi.Int32 Function(
       ffi.Pointer<ffi.Uint8> outputPathPtr,
@@ -143,6 +209,60 @@ typedef _MuxFramesToAviDart =
       int fps,
     );
 
+typedef _MuxFramesAndPcmToAviNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> outputPathPtr,
+      ffi.Size outputPathLen,
+      ffi.Pointer<ffi.Uint8> framesConcatPtr,
+      ffi.Pointer<ffi.Uint32> frameSizesPtr,
+      ffi.Size numFrames,
+      ffi.Uint32 width,
+      ffi.Uint32 height,
+      ffi.Uint32 fps,
+      ffi.Pointer<ffi.Uint8> pcmDataPtr,
+      ffi.Size pcmByteLen,
+      ffi.Uint32 sampleRate,
+      ffi.Uint16 channels,
+    );
+
+typedef _MuxFramesAndPcmToAviDart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> outputPathPtr,
+      int outputPathLen,
+      ffi.Pointer<ffi.Uint8> framesConcatPtr,
+      ffi.Pointer<ffi.Uint32> frameSizesPtr,
+      int numFrames,
+      int width,
+      int height,
+      int fps,
+      ffi.Pointer<ffi.Uint8> pcmDataPtr,
+      int pcmByteLen,
+      int sampleRate,
+      int channels,
+    );
+
+typedef _ProcessPcm16AudioNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> pcmBytesPtr,
+      ffi.Size pcmByteLen,
+      ffi.Uint32 sampleRate,
+      ffi.Uint16 channels,
+      ffi.Double volume,
+      ffi.Int32 fadeIn,
+      ffi.Int32 fadeOut,
+    );
+
+typedef _ProcessPcm16AudioDart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> pcmBytesPtr,
+      int pcmByteLen,
+      int sampleRate,
+      int channels,
+      double volume,
+      int fadeIn,
+      int fadeOut,
+    );
+
 typedef _MallocNative = ffi.Pointer<ffi.Void> Function(ffi.Size size);
 typedef _MallocDart = ffi.Pointer<ffi.Void> Function(int size);
 
@@ -150,12 +270,12 @@ typedef _FreeNative = ffi.Void Function(ffi.Pointer<ffi.Void> ptr);
 typedef _FreeDart = void Function(ffi.Pointer<ffi.Void> ptr);
 
 /// جسر هجين يربط تطبيق Flutter بمحرك Rust الأصلي (`librust_video_engine`)
-/// المستلهم من معمارية FilmCraft و EffectCraft:
-/// - التوقيت الصحيح بدون انجراف (254,016,000,000 ticks/sec)
-/// - استيفاء Catmull-Rom Auto-Bezier و Hold Keyframes
-/// - مصفوفات تصحيح الألوان البرمجية Lumetri Color Grading (Rec.709) عبر `rust_compute_lumetri_matrix`
-/// - تجميع الإطارات وتوليد حاوية الفيديو RIFF/AVI مباشرة عبر `rust_mux_frames_to_avi`
-/// - حفظ الفيديوهات المصدّرة مباشرة في مجلد التنزيلات العام (`Download/OurLoveStory`)
+/// المستلهم من معمارية FilmCraft (`storytold/filmcraft`) و EffectCraft (`storytold/effectcraft`):
+/// - `filmcraft-time`: التوقيت الصحيح بدون انجراف (254,016,000,000 ticks/sec)
+/// - `filmcraft-project::keyframe`: حلال Newton-Raphson لمنحنيات Cubic Bezier الزمنية و Catmull-Rom
+/// - `filmcraft-color`: مصفوفات تصحيح الألوان Lumetri (ITU-R BT.709) وتحويل RGBA -> BT.709 YUV420 (2x2 Box-Filter)
+/// - `filmcraft-audio-dsp`: مازج صوت متعدد المسارات بدقة الـ Tick مع تلاشي Constant-Power Sine ومحدد ذروة ناعم Tanh
+/// - `filmcraft-avi` + `MediaCodec`: دمج متداخل إطاراً بإطار (`00dc` + `01wb`) ثم ترميز `.mp4` قياسي (BT.709 H.264 + AAC)
 class RustVideoBridge {
   static final RustVideoBridge instance = RustVideoBridge._();
 
@@ -171,12 +291,19 @@ class RustVideoBridge {
 
   _SecondsToTicksDart? _rustSecondsToTicks;
   _TicksToSecondsDart? _rustTicksToSeconds;
+  _TicksToAudioSampleDart? _rustTicksToAudioSample;
   _ApplyEasingDart? _rustApplyEasing;
+  _SolveCubicBezier2dDart? _rustSolveCubicBezier2d;
+  _CubicBezierEvalDart? _rustCubicBezierEval;
   _CatmullRomDart? _rustCatmullRom;
   _InterpolateDart? _rustInterpolate;
   _ComputeLumetriMatrixDart? _rustComputeLumetriMatrix;
   _BlendRgbaFramesDart? _rustBlendRgbaFrames;
+  _RgbaToNv12Dart? _rustRgbaToNv12;
+  _MixPcm16OverlayDart? _rustMixPcm16Overlay;
   _MuxFramesToAviDart? _rustMuxFramesToAvi;
+  _MuxFramesAndPcmToAviDart? _rustMuxFramesAndPcmToAvi;
+  _ProcessPcm16AudioDart? _rustProcessPcm16Audio;
 
   _MallocDart? _malloc;
   _FreeDart? _free;
@@ -208,6 +335,15 @@ class RustVideoBridge {
       return rustFn(ticks);
     }
     return ticks / ticksPerSecond;
+  }
+
+  int ticksToAudioSample(int ticks, int sampleRate) {
+    final rustFn = _rustTicksToAudioSample;
+    if (rustFn != null) {
+      return rustFn(ticks, sampleRate);
+    }
+    if (ticks <= 0 || sampleRate <= 0) return 0;
+    return ((ticks / ticksPerSecond) * sampleRate).round();
   }
 
   void _tryLoadNativeAllocator() {
@@ -264,9 +400,23 @@ class RustVideoBridge {
               .lookupFunction<_TicksToSecondsNative, _TicksToSecondsDart>(
                 'rust_ticks_to_seconds',
               );
+          _rustTicksToAudioSample = lib
+              .lookupFunction<
+                _TicksToAudioSampleNative,
+                _TicksToAudioSampleDart
+              >('rust_ticks_to_audio_sample');
           _rustApplyEasing = lib
               .lookupFunction<_ApplyEasingNative, _ApplyEasingDart>(
                 'rust_apply_easing',
+              );
+          _rustSolveCubicBezier2d = lib
+              .lookupFunction<
+                _SolveCubicBezier2dNative,
+                _SolveCubicBezier2dDart
+              >('rust_solve_cubic_bezier_2d');
+          _rustCubicBezierEval = lib
+              .lookupFunction<_CubicBezierEvalNative, _CubicBezierEvalDart>(
+                'rust_cubic_bezier_eval',
               );
           _rustCatmullRom = lib
               .lookupFunction<_CatmullRomNative, _CatmullRomDart>(
@@ -275,6 +425,23 @@ class RustVideoBridge {
           _rustBlendRgbaFrames = lib
               .lookupFunction<_BlendRgbaFramesNative, _BlendRgbaFramesDart>(
                 'rust_blend_rgba_frames',
+              );
+          _rustRgbaToNv12 = lib
+              .lookupFunction<_RgbaToNv12Native, _RgbaToNv12Dart>(
+                'rust_rgba_to_nv12',
+              );
+          _rustMixPcm16Overlay = lib
+              .lookupFunction<_MixPcm16OverlayNative, _MixPcm16OverlayDart>(
+                'rust_mix_pcm16_overlay',
+              );
+          _rustMuxFramesAndPcmToAvi = lib
+              .lookupFunction<
+                _MuxFramesAndPcmToAviNative,
+                _MuxFramesAndPcmToAviDart
+              >('rust_mux_frames_and_pcm_to_avi');
+          _rustProcessPcm16Audio = lib
+              .lookupFunction<_ProcessPcm16AudioNative, _ProcessPcm16AudioDart>(
+                'rust_process_pcm16_audio',
               );
         } catch (_) {}
       }
@@ -298,6 +465,64 @@ class RustVideoBridge {
     if (freeFn != null && ptr != ffi.nullptr) {
       freeFn(ptr.cast<ffi.Void>());
     }
+  }
+
+  /// حل معادلة الزمن x(u) = t لمنحنى Cubic Bezier ثنائي البعد عبر Newton-Raphson + Bisection
+  double solveCubicBezier2d(
+    double x1,
+    double y1,
+    double x2,
+    double y2,
+    double t,
+  ) {
+    final rustSolver = _rustSolveCubicBezier2d;
+    if (rustSolver != null) {
+      return rustSolver(x1, y1, x2, y2, t);
+    }
+    final clampedT = t.clamp(0.0, 1.0);
+    if (clampedT <= 0.0 || clampedT >= 1.0) return clampedT;
+
+    double sampleAxis(double c1, double c2, double u) {
+      final inv = 1.0 - u;
+      return 3.0 * inv * inv * u * c1 + 3.0 * inv * u * u * c2 + u * u * u;
+    }
+
+    double sampleDeriv(double c1, double c2, double u) {
+      final inv = 1.0 - u;
+      return 3.0 * inv * inv * c1 +
+          6.0 * inv * u * (c2 - c1) +
+          3.0 * u * u * (1.0 - c2);
+    }
+
+    double u = clampedT;
+    for (int i = 0; i < 6; i++) {
+      final err = sampleAxis(x1, x2, u) - clampedT;
+      if (err.abs() < 1e-7) return sampleAxis(y1, y2, u);
+      final d = sampleDeriv(x1, x2, u);
+      if (d.abs() < 1e-6) break;
+      u = (u - err / d).clamp(0.0, 1.0);
+    }
+    return sampleAxis(y1, y2, u);
+  }
+
+  /// استيفاء منحنى Cubic Bezier عبر دالة Rust `rust_cubic_bezier_eval`
+  double evaluateCubicBezier(
+    double p0,
+    double p1,
+    double p2,
+    double p3,
+    double t,
+  ) {
+    final rustFn = _rustCubicBezierEval;
+    if (rustFn != null) {
+      return rustFn(p0, p1, p2, p3, t);
+    }
+    final u = t.clamp(0.0, 1.0);
+    final inv = 1.0 - u;
+    return (inv * inv * inv) * p0 +
+        3.0 * (inv * inv) * u * p1 +
+        3.0 * inv * (u * u) * p2 +
+        (u * u * u) * p3;
   }
 
   /// حساب قيم التحويل (Position, Scale, Rotation, Opacity) عند أي لحظة زمنية
@@ -433,12 +658,9 @@ class RustVideoBridge {
     final c = t.clamp(0.0, 1.0);
     return switch (easing) {
       KeyframeEasing.linear => c,
-      KeyframeEasing.easeIn => c * c * c,
-      KeyframeEasing.easeOut => 1.0 - math.pow(1.0 - c, 3).toDouble(),
-      KeyframeEasing.easeInOut =>
-        c < 0.5
-            ? 4.0 * c * c * c
-            : 1.0 - math.pow(-2.0 * c + 2.0, 3).toDouble() / 2.0,
+      KeyframeEasing.easeIn => solveCubicBezier2d(0.42, 0.0, 1.0, 1.0, c),
+      KeyframeEasing.easeOut => solveCubicBezier2d(0.0, 0.0, 0.58, 1.0, c),
+      KeyframeEasing.easeInOut => solveCubicBezier2d(0.42, 0.0, 0.58, 1.0, c),
       KeyframeEasing.elasticOut =>
         (c == 0.0 || c == 1.0)
             ? c
@@ -446,7 +668,7 @@ class RustVideoBridge {
                       math.sin((c * 10.0 - 0.75) * ((2.0 * math.pi) / 3.0)) +
                   1.0,
       KeyframeEasing.hold => c < 1.0 ? 0.0 : 1.0,
-      KeyframeEasing.autoBezier => c * c * (3.0 - 2.0 * c),
+      KeyframeEasing.autoBezier => solveCubicBezier2d(0.25, 0.1, 0.25, 1.0, c),
     };
   }
 
@@ -568,24 +790,168 @@ class RustVideoBridge {
     return out;
   }
 
-  /// تجميع قائمة إطارات PNG ملتقطة من الـ Canvas إلى ملف فيديو قياسي (RIFF AVI Motion-PNG)
-  /// يستدعي `rust_mux_frames_to_avi` مباشرة عبر FFI لتحقيق سرعة تجميع وتصدير فائقة.
+  /// تحويل إطار RGBA8888 إلى فضاء ITU-R BT.709 YUV420 (NV12) عبر دالة Rust `rust_rgba_to_nv12`
+  Uint8List? convertRgbaToNv12({
+    required Uint8List rgbaBytes,
+    required int width,
+    required int height,
+  }) {
+    final rustConvert = _rustRgbaToNv12;
+    final expectedRgba = width * height * 4;
+    final nv12Len = (width * height * 3) ~/ 2;
+    if (rustConvert == null ||
+        width <= 0 ||
+        height <= 0 ||
+        rgbaBytes.length < expectedRgba) {
+      return null;
+    }
+
+    final inPtr = _alloc<ffi.Uint8>(expectedRgba);
+    final outPtr = _alloc<ffi.Uint8>(nv12Len);
+    try {
+      if (inPtr == ffi.nullptr || outPtr == ffi.nullptr) return null;
+      inPtr.asTypedList(expectedRgba).setRange(0, expectedRgba, rgbaBytes);
+      final status = rustConvert(inPtr, outPtr, width, height);
+      if (status == 0) {
+        return Uint8List.fromList(outPtr.asTypedList(nv12Len));
+      }
+    } finally {
+      _freePtr(inPtr);
+      _freePtr(outPtr);
+    }
+    return null;
+  }
+
+  /// مزج مؤثر صوتي (Overlay PCM 16-bit LE) فوق المسار الصوتي الرئيسي بدقة الـ Tick عبر `rust_mix_pcm16_overlay`
+  Uint8List mixPcm16Overlay({
+    required Uint8List masterPcm,
+    required Uint8List overlayPcm,
+    int sampleRate = 44100,
+    int channels = 2,
+    required double startTimeSeconds,
+    double overlayVolume = 0.9,
+  }) {
+    if (masterPcm.length < 2 || overlayPcm.length < 2) return masterPcm;
+    final rustMix = _rustMixPcm16Overlay;
+    if (rustMix != null) {
+      final masterPtr = _alloc<ffi.Uint8>(masterPcm.length);
+      final overlayPtr = _alloc<ffi.Uint8>(overlayPcm.length);
+      try {
+        if (masterPtr != ffi.nullptr && overlayPtr != ffi.nullptr) {
+          masterPtr
+              .asTypedList(masterPcm.length)
+              .setRange(0, masterPcm.length, masterPcm);
+          overlayPtr
+              .asTypedList(overlayPcm.length)
+              .setRange(0, overlayPcm.length, overlayPcm);
+          final status = rustMix(
+            masterPtr,
+            masterPcm.length,
+            overlayPtr,
+            overlayPcm.length,
+            sampleRate,
+            channels,
+            startTimeSeconds,
+            overlayVolume,
+          );
+          if (status == 0) {
+            return Uint8List.fromList(masterPtr.asTypedList(masterPcm.length));
+          }
+        }
+      } finally {
+        _freePtr(masterPtr);
+        _freePtr(overlayPtr);
+      }
+    }
+
+    // بديل Dart احتياطي لمزج الصوت مع محدد ذروة ناعم
+    final out = Uint8List.fromList(masterPcm);
+    final outData = ByteData.sublistView(out);
+    final ovData = ByteData.sublistView(overlayPcm);
+    final startFrame = ticksToAudioSample(
+      secondsToTicks(math.max(0.0, startTimeSeconds)),
+      sampleRate,
+    );
+    final startByte = startFrame * channels * 2;
+    if (startByte >= out.length) return out;
+
+    final availBytes = math.min(out.length - startByte, overlayPcm.length) & ~1;
+    final count = availBytes ~/ 2;
+    final gain = overlayVolume.clamp(0.0, 2.0);
+
+    for (int i = 0; i < count; i++) {
+      final mIdx = startByte + i * 2;
+      final oIdx = i * 2;
+      final mVal = outData.getInt16(mIdx, Endian.little);
+      final oVal = ovData.getInt16(oIdx, Endian.little);
+      final mixed = (mVal + oVal * gain).round().clamp(-32767, 32767);
+      outData.setInt16(mIdx, mixed, Endian.little);
+    }
+    return out;
+  }
+
+  /// معالجة عينات الصوت PCM 16-bit LE عبر دالة Rust `rust_process_pcm16_audio`
+  /// (تطبيق Volume + Constant-Power Sine Fade In/Out + Soft-Knee True-Peak Limiter)
+  Uint8List processPcm16Audio({
+    required Uint8List pcmBytes,
+    int sampleRate = 44100,
+    int channels = 2,
+    double volume = 0.85,
+    bool fadeIn = true,
+    bool fadeOut = true,
+  }) {
+    if (pcmBytes.length < 2) return pcmBytes;
+    final rustDsp = _rustProcessPcm16Audio;
+    if (rustDsp != null) {
+      final ptr = _alloc<ffi.Uint8>(pcmBytes.length);
+      if (ptr != ffi.nullptr) {
+        try {
+          ptr
+              .asTypedList(pcmBytes.length)
+              .setRange(0, pcmBytes.length, pcmBytes);
+          final status = rustDsp(
+            ptr,
+            pcmBytes.length,
+            sampleRate,
+            channels,
+            volume,
+            fadeIn ? 1 : 0,
+            fadeOut ? 1 : 0,
+          );
+          if (status == 0) {
+            return Uint8List.fromList(ptr.asTypedList(pcmBytes.length));
+          }
+        } finally {
+          _freePtr(ptr);
+        }
+      }
+    }
+    return pcmBytes;
+  }
+
+  /// تجميع قائمة إطارات PNG مع الصوت المتداخل (`00dc` + `01wb`) إلى ملف فيديو قياسي (RIFF AVI)
+  /// يستدعي `rust_mux_frames_and_pcm_to_avi` أو `rust_mux_frames_to_avi` مباشرة عبر FFI.
   Future<File> muxFramesToVideoContainer({
     required List<Uint8List> frames,
     required String outputPath,
     required int width,
     required int height,
     required int fps,
+    Uint8List? pcm16Audio,
+    int audioSampleRate = 44100,
+    int audioChannels = 2,
   }) async {
-    final rustMux = _rustMuxFramesToAvi;
-    if (rustMux != null && frames.isNotEmpty) {
+    if (frames.isNotEmpty &&
+        (_rustMuxFramesAndPcmToAvi != null || _rustMuxFramesToAvi != null)) {
       final muxedInRust = _tryMuxFramesViaRustFfi(
-        rustMux: rustMux,
         frames: frames,
         outputPath: outputPath,
         width: width,
         height: height,
         fps: fps,
+        pcm16Audio: pcm16Audio,
+        audioSampleRate: audioSampleRate,
+        audioChannels: audioChannels,
       );
       if (muxedInRust) {
         return File(outputPath);
@@ -602,12 +968,14 @@ class RustVideoBridge {
   }
 
   bool _tryMuxFramesViaRustFfi({
-    required _MuxFramesToAviDart rustMux,
     required List<Uint8List> frames,
     required String outputPath,
     required int width,
     required int height,
     required int fps,
+    Uint8List? pcm16Audio,
+    int audioSampleRate = 44100,
+    int audioChannels = 2,
   }) {
     final pathBytes = utf8.encode(outputPath);
     if (pathBytes.isEmpty) {
@@ -627,6 +995,14 @@ class RustVideoBridge {
     final frameSizesPtr = _alloc<ffi.Uint32>(
       frames.length * ffi.sizeOf<ffi.Uint32>(),
     );
+
+    final hasPcm =
+        pcm16Audio != null &&
+        pcm16Audio.isNotEmpty &&
+        _rustMuxFramesAndPcmToAvi != null;
+    final pcmPtr = hasPcm
+        ? _alloc<ffi.Uint8>(pcm16Audio.length)
+        : ffi.nullptr.cast<ffi.Uint8>();
 
     try {
       if (pathPtr == ffi.nullptr ||
@@ -649,16 +1025,37 @@ class RustVideoBridge {
         cursor += frameLen;
       }
 
-      final status = rustMux(
-        pathPtr,
-        pathBytes.length,
-        framesConcatPtr,
-        frameSizesPtr,
-        frames.length,
-        width,
-        height,
-        fps,
-      );
+      int status = -1;
+      if (hasPcm && pcmPtr != ffi.nullptr) {
+        pcmPtr
+            .asTypedList(pcm16Audio.length)
+            .setRange(0, pcm16Audio.length, pcm16Audio);
+        status = _rustMuxFramesAndPcmToAvi!(
+          pathPtr,
+          pathBytes.length,
+          framesConcatPtr,
+          frameSizesPtr,
+          frames.length,
+          width,
+          height,
+          fps,
+          pcmPtr,
+          pcm16Audio.length,
+          audioSampleRate,
+          audioChannels,
+        );
+      } else if (_rustMuxFramesToAvi != null) {
+        status = _rustMuxFramesToAvi!(
+          pathPtr,
+          pathBytes.length,
+          framesConcatPtr,
+          frameSizesPtr,
+          frames.length,
+          width,
+          height,
+          fps,
+        );
+      }
 
       return status == 0 && File(outputPath).existsSync();
     } catch (_) {
@@ -667,6 +1064,9 @@ class RustVideoBridge {
       _freePtr(pathPtr);
       _freePtr(framesConcatPtr);
       _freePtr(frameSizesPtr);
+      if (pcmPtr != ffi.nullptr) {
+        _freePtr(pcmPtr);
+      }
     }
   }
 
@@ -846,7 +1246,7 @@ class RustVideoBridge {
     return null;
   }
 
-  /// حفظ ملف الفيديو المصدّر في مجلد التنزيلات العام (`Download/OurLoveStory`) لكي يصل إليه المستخدم بسهولة
+  /// حفظ ملف الفيديو المصدّر في المعرض (`Movies/OurLoveStory`) ومجلد التنزيلات العام (`Download/OurLoveStory`)
   Future<String?> saveVideoToPublicDownloads(
     String sourcePath, {
     String? customFileName,
@@ -931,18 +1331,23 @@ class RustVideoBridge {
     }
   }
 
-  Future<String?> _prepareAudioFileForExport(VideoProjectEntity project) async {
+  Future<String?> _prepareSingleAudioSource(
+    String sourcePath, {
+    required bool isLocalFile,
+    required String tempTag,
+  }) async {
     try {
-      if (project.customAudioPath != null &&
-          project.customAudioPath!.isNotEmpty &&
-          File(project.customAudioPath!).existsSync()) {
-        return project.customAudioPath;
+      if (isLocalFile) {
+        if (sourcePath.isNotEmpty && File(sourcePath).existsSync()) {
+          return sourcePath;
+        }
+        return null;
       }
-      if (project.audioAsset != null && project.audioAsset!.isNotEmpty) {
-        final byteData = await rootBundle.load('assets/${project.audioAsset}');
+      if (sourcePath.isNotEmpty) {
+        final byteData = await rootBundle.load('assets/$sourcePath');
         final tempDir = await getTemporaryDirectory();
-        final ext = project.audioAsset!.split('.').last;
-        final tempAudio = File('${tempDir.path}/export_bgm.$ext');
+        final ext = sourcePath.split('.').last;
+        final tempAudio = File('${tempDir.path}/${tempTag}_audio.$ext');
         await tempAudio.writeAsBytes(
           byteData.buffer.asUint8List(
             byteData.offsetInBytes,
@@ -953,6 +1358,25 @@ class RustVideoBridge {
         return tempAudio.path;
       }
     } catch (_) {}
+    return null;
+  }
+
+  Future<String?> _prepareAudioFileForExport(VideoProjectEntity project) async {
+    if (project.customAudioPath != null &&
+        project.customAudioPath!.isNotEmpty) {
+      return _prepareSingleAudioSource(
+        project.customAudioPath!,
+        isLocalFile: true,
+        tempTag: 'export_bgm_custom',
+      );
+    }
+    if (project.audioAsset != null && project.audioAsset!.isNotEmpty) {
+      return _prepareSingleAudioSource(
+        project.audioAsset!,
+        isLocalFile: false,
+        tempTag: 'export_bgm_asset',
+      );
+    }
     return null;
   }
 
@@ -975,6 +1399,108 @@ class RustVideoBridge {
     final coverFile = File('${exportDir.path}/$baseName.png');
     await coverFile.writeAsBytes(renderedFrames.first, flush: true);
 
+    final preparedAudioPath = await _prepareAudioFileForExport(project);
+    Uint8List? rustProcessedPcm;
+    String? processedPcmFilePath;
+    int pcmSampleRate = 44100;
+    int pcmChannels = 2;
+
+    final durationMs = ((renderedFrames.length / math.max(1, fps)) * 1000)
+        .round();
+
+    // 1. فك ترميز الموسيقى الخلفية + كافة المؤثرات الصوتية على خط الزمن ومزجها بدقة الـ Tick في Rust
+    if (Platform.isAndroid &&
+        (preparedAudioPath != null || project.soundEffects.isNotEmpty)) {
+      try {
+        final tempDir = await getTemporaryDirectory();
+        final masterPcmPath = '${tempDir.path}/master_audio_$timestampMs.pcm';
+
+        if (preparedAudioPath != null && project.audioVolume > 0.01) {
+          final decodedInfo = await _mediaChannel
+              .invokeMethod<Map<Object?, Object?>>('decodeAudioToPcmFile', {
+                'audioPath': preparedAudioPath,
+                'outputPcmPath': masterPcmPath,
+                'startOffsetMs': (project.audioStartOffset * 1000).round(),
+                'durationMs': durationMs,
+                'loopIfShorter': true,
+              });
+          if (decodedInfo != null) {
+            final pcmPath = decodedInfo['pcmPath']?.toString();
+            pcmSampleRate =
+                (decodedInfo['sampleRate'] as num?)?.toInt() ?? 44100;
+            pcmChannels = (decodedInfo['channels'] as num?)?.toInt() ?? 2;
+            if (pcmPath != null && File(pcmPath).existsSync()) {
+              final rawBgm = await File(pcmPath).readAsBytes();
+              rustProcessedPcm = processPcm16Audio(
+                pcmBytes: rawBgm,
+                sampleRate: pcmSampleRate,
+                channels: pcmChannels,
+                volume: project.audioVolume,
+                fadeIn: project.audioFadeIn,
+                fadeOut: project.audioFadeOut,
+              );
+            }
+          }
+        }
+
+        // إذا لم تكن هناك موسيقى خلفية ولكن توجد مؤثرات صوتية، ننشئ مخزن صمت (Silence Buffer) بطول الفيديو
+        if (rustProcessedPcm == null && project.soundEffects.isNotEmpty) {
+          final totalPcmBytes =
+              (((durationMs / 1000.0) * pcmSampleRate).round() *
+                  pcmChannels *
+                  2) &
+              ~3;
+          if (totalPcmBytes > 0) {
+            rustProcessedPcm = Uint8List(totalPcmBytes);
+          }
+        }
+
+        // مزج كل مؤثر صوتي على خط الزمن (soundEffects) فوق المسار الرئيسي عبر `rust_mix_pcm16_overlay`
+        if (rustProcessedPcm != null && project.soundEffects.isNotEmpty) {
+          for (int sfxIdx = 0; sfxIdx < project.soundEffects.length; sfxIdx++) {
+            final sfx = project.soundEffects[sfxIdx];
+            final sfxFile = await _prepareSingleAudioSource(
+              sfx.sourcePath,
+              isLocalFile: sfx.isLocalFile,
+              tempTag: 'export_sfx_${timestampMs}_$sfxIdx',
+            );
+            if (sfxFile == null) continue;
+
+            final sfxPcmPath = '${tempDir.path}/sfx_${timestampMs}_$sfxIdx.pcm';
+            final sfxDecoded = await _mediaChannel
+                .invokeMethod<Map<Object?, Object?>>('decodeAudioToPcmFile', {
+                  'audioPath': sfxFile,
+                  'outputPcmPath': sfxPcmPath,
+                  'startOffsetMs': 0,
+                  'durationMs': (sfx.durationSeconds * 1000).round().clamp(
+                    500,
+                    durationMs,
+                  ),
+                  'loopIfShorter': false,
+                });
+            final resolvedSfxPcm = sfxDecoded?['pcmPath']?.toString();
+            if (resolvedSfxPcm != null && File(resolvedSfxPcm).existsSync()) {
+              final sfxBytes = await File(resolvedSfxPcm).readAsBytes();
+              rustProcessedPcm = mixPcm16Overlay(
+                masterPcm: rustProcessedPcm!,
+                overlayPcm: sfxBytes,
+                sampleRate: pcmSampleRate,
+                channels: pcmChannels,
+                startTimeSeconds: sfx.startTime,
+                overlayVolume: sfx.volume,
+              );
+            }
+          }
+        }
+
+        if (rustProcessedPcm != null && rustProcessedPcm.isNotEmpty) {
+          await File(masterPcmPath).writeAsBytes(rustProcessedPcm, flush: true);
+          processedPcmFilePath = masterPcmPath;
+        }
+      } catch (_) {}
+    }
+
+    // 2. تجميع الإطارات (`00dc`) مع الصوت المتداخل (`01wb`) داخل حاوية RIFF/AVI عبر `rust_mux_frames_and_pcm_to_avi`
     final aviPath = '${exportDir.path}/$baseName.avi';
     await muxFramesToVideoContainer(
       frames: renderedFrames,
@@ -982,34 +1508,71 @@ class RustVideoBridge {
       width: width,
       height: height,
       fps: fps,
+      pcm16Audio: rustProcessedPcm,
+      audioSampleRate: pcmSampleRate,
+      audioChannels: pcmChannels,
     );
 
     String finalVideoPath = aviPath;
     final mp4Path = '${exportDir.path}/$baseName.mp4';
-    final preparedAudioPath = await _prepareAudioFileForExport(project);
 
-    try {
-      final ffmpegArgs = <String>['-y', '-i', aviPath];
-      if (preparedAudioPath != null && File(preparedAudioPath).existsSync()) {
-        if (project.audioStartOffset > 0) {
-          ffmpegArgs.addAll([
-            '-ss',
-            project.audioStartOffset.toStringAsFixed(2),
-          ]);
+    // 3. على أندرويد: ترميز عتادي مباشر إلى MP4 (BT.709 H.264 + AAC Audio) عبر MediaCodec + MediaMuxer
+    if (Platform.isAndroid) {
+      try {
+        final nativeMp4 = await _mediaChannel
+            .invokeMethod<String>('muxToMp4WithAudio', {
+              'aviPath': aviPath,
+              'outputMp4Path': mp4Path,
+              'audioPath': preparedAudioPath,
+              'processedPcmPath': processedPcmFilePath,
+              'pcmSampleRate': pcmSampleRate,
+              'pcmChannels': pcmChannels,
+              'audioStartOffsetMs': (project.audioStartOffset * 1000).round(),
+              'audioVolume': project.audioVolume,
+              'audioFadeIn': project.audioFadeIn,
+              'audioFadeOut': project.audioFadeOut,
+              'fps': fps,
+              'width': width,
+              'height': height,
+            });
+        if (nativeMp4 != null &&
+            nativeMp4.isNotEmpty &&
+            File(nativeMp4).existsSync() &&
+            File(nativeMp4).lengthSync() > 0) {
+          finalVideoPath = nativeMp4;
         }
-        ffmpegArgs.addAll(['-i', preparedAudioPath]);
-      }
-      ffmpegArgs.addAll(['-c:v', 'libx264', '-pix_fmt', 'yuv420p']);
-      if (preparedAudioPath != null && File(preparedAudioPath).existsSync()) {
-        ffmpegArgs.addAll(['-c:a', 'aac', '-shortest']);
-      }
-      ffmpegArgs.add(mp4Path);
+      } catch (_) {}
+    }
 
-      final res = await Process.run('ffmpeg', ffmpegArgs);
-      if (res.exitCode == 0 && File(mp4Path).existsSync()) {
-        finalVideoPath = mp4Path;
-      }
-    } catch (_) {}
+    // 4. على أنظمة سطح المكتب: استخدام FFmpeg إن توفر
+    if (finalVideoPath == aviPath) {
+      try {
+        final ffmpegArgs = <String>['-y', '-i', aviPath];
+        if (rustProcessedPcm == null &&
+            preparedAudioPath != null &&
+            File(preparedAudioPath).existsSync()) {
+          if (project.audioStartOffset > 0) {
+            ffmpegArgs.addAll([
+              '-ss',
+              project.audioStartOffset.toStringAsFixed(2),
+            ]);
+          }
+          ffmpegArgs.addAll(['-i', preparedAudioPath]);
+        }
+        ffmpegArgs.addAll(['-c:v', 'libx264', '-pix_fmt', 'yuv420p']);
+        if (rustProcessedPcm != null ||
+            (preparedAudioPath != null &&
+                File(preparedAudioPath).existsSync())) {
+          ffmpegArgs.addAll(['-c:a', 'aac', '-shortest']);
+        }
+        ffmpegArgs.add(mp4Path);
+
+        final res = await Process.run('ffmpeg', ffmpegArgs);
+        if (res.exitCode == 0 && File(mp4Path).existsSync()) {
+          finalVideoPath = mp4Path;
+        }
+      } catch (_) {}
+    }
 
     final ext = finalVideoPath.split('.').last;
     final publicFileName = '$baseName.$ext';
@@ -1083,7 +1646,7 @@ class RustVideoBridge {
               (map['publicVideoPath'] as String?) ?? resolvedVideoPath;
           final framesCount =
               (map['renderedFramesCount'] as num?)?.toInt() ?? 0;
-          final fps = (map['exportedFps'] as num?)?.toInt() ?? 8;
+          final fps = (map['exportedFps'] as num?)?.toInt() ?? 15;
           final exportedAt =
               DateTime.tryParse((map['exportedAt'] as String?) ?? '') ??
               jsonFile.lastModifiedSync();
@@ -1149,7 +1712,7 @@ class ExportedVideoBundle {
     required this.videoFilePath,
     String? publicVideoPath,
     required this.renderedFramesCount,
-    this.fps = 8,
+    this.fps = 15,
     this.fileSizeBytes = 0,
     DateTime? exportedAt,
   }) : publicVideoPath = publicVideoPath ?? videoFilePath,

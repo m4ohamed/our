@@ -1386,12 +1386,12 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     });
 
     try {
-      const int exportFps = 8;
-      final double totalDur = _project.totalDuration.clamp(1.0, 20.0);
-      final int totalFrames = (totalDur * exportFps).round().clamp(8, 160);
+      const int exportFps = 15;
+      final double totalDur = _project.totalDuration.clamp(1.0, 30.0);
+      final int totalFrames = (totalDur * exportFps).round().clamp(15, 450);
       final List<Uint8List> capturedFrames = [];
-      int frameWidth = 540;
-      int frameHeight = 960;
+      int frameWidth = 720;
+      int frameHeight = 1280;
 
       for (int i = 0; i < totalFrames; i++) {
         if (!mounted) return;
@@ -1407,7 +1407,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
             _stageBoundaryKey.currentContext?.findRenderObject()
                 as RenderRepaintBoundary?;
         if (boundary != null) {
-          final ui.Image img = await boundary.toImage(pixelRatio: 1.5);
+          final ui.Image img = await boundary.toImage(pixelRatio: 2.5);
           frameWidth = img.width;
           frameHeight = img.height;
           final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
@@ -1484,7 +1484,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     final theme = Theme.of(context);
     final fileName = bundle.publicVideoPath.split('/').last;
     final friendlyLocation = bundle.isSavedInPublicDownloads
-        ? 'مجلد التنزيلات في الهاتف (Download / OurLoveStory)'
+        ? 'المعرض (Gallery) + التنزيلات (Download/OurLoveStory)'
         : 'مكتبة الفيديوهات المصدّرة داخل التطبيق';
 
     showDialog(
@@ -4399,8 +4399,12 @@ class _ExportedVideoPlayerDialogState
           jsonDecode(raw) as Map<String, dynamic>,
         );
       }
+      final aviCandidate =
+          widget.bundle.videoFilePath.toLowerCase().endsWith('.avi')
+          ? widget.bundle.videoFilePath
+          : widget.bundle.projectJsonPath.replaceAll('.json', '.avi');
       final extracted = await RustVideoBridge.instance.extractFramesFromAvi(
-        widget.bundle.videoFilePath,
+        aviCandidate,
       );
       if (mounted) {
         setState(() {
