@@ -8,6 +8,7 @@ import 'package:flutter/services.dart' show MethodChannel, rootBundle;
 import 'package:path_provider/path_provider.dart';
 
 import '../../domain/entities/video_project_entity.dart';
+import 'offscreen_video_compositor.dart';
 
 // ─── FFI Struct & Signatures ──────────────────────────────────────────────────
 
@@ -27,6 +28,9 @@ final class _NativeTransform extends ffi.Struct {
   @ffi.Double()
   external double opacity;
 }
+
+typedef _GetHardwareConcurrencyNative = ffi.Uint32 Function();
+typedef _GetHardwareConcurrencyDart = int Function();
 
 typedef _SecondsToTicksNative = ffi.Int64 Function(ffi.Double seconds);
 typedef _SecondsToTicksDart = int Function(double seconds);
@@ -143,6 +147,78 @@ typedef _BlendRgbaFramesDart =
       ffi.Pointer<ffi.Uint8> output,
       int length,
       double progress,
+    );
+
+typedef _RgbaToBt709Yuv420StridedNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> rgbaPtr,
+      ffi.Pointer<ffi.Uint8> yOutPtr,
+      ffi.Pointer<ffi.Uint8> uOutPtr,
+      ffi.Pointer<ffi.Uint8> vOutPtr,
+      ffi.Uint32 width,
+      ffi.Uint32 height,
+      ffi.Uint32 yRowStride,
+      ffi.Uint32 uvRowStride,
+      ffi.Uint32 uvPixelStride,
+    );
+
+typedef _RgbaToBt709Yuv420StridedDart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> rgbaPtr,
+      ffi.Pointer<ffi.Uint8> yOutPtr,
+      ffi.Pointer<ffi.Uint8> uOutPtr,
+      ffi.Pointer<ffi.Uint8> vOutPtr,
+      int width,
+      int height,
+      int yRowStride,
+      int uvRowStride,
+      int uvPixelStride,
+    );
+
+typedef _ProcessRgbaBatchLumetriNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> rgbaBatchPtr,
+      ffi.Size numFrames,
+      ffi.Uint32 width,
+      ffi.Uint32 height,
+      ffi.Double exposure,
+      ffi.Double contrast,
+      ffi.Double saturation,
+      ffi.Double temperature,
+      ffi.Double fadedFilm,
+      ffi.Double vignette,
+    );
+
+typedef _ProcessRgbaBatchLumetriDart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> rgbaBatchPtr,
+      int numFrames,
+      int width,
+      int height,
+      double exposure,
+      double contrast,
+      double saturation,
+      double temperature,
+      double fadedFilm,
+      double vignette,
+    );
+
+typedef _RgbaBatchToBt709Nv12Native =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> rgbaBatchPtr,
+      ffi.Pointer<ffi.Uint8> nv12BatchOutPtr,
+      ffi.Size numFrames,
+      ffi.Uint32 width,
+      ffi.Uint32 height,
+    );
+
+typedef _RgbaBatchToBt709Nv12Dart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> rgbaBatchPtr,
+      ffi.Pointer<ffi.Uint8> nv12BatchOutPtr,
+      int numFrames,
+      int width,
+      int height,
     );
 
 typedef _RgbaToNv12Native =
@@ -289,6 +365,7 @@ class RustVideoBridge {
   ffi.DynamicLibrary? _dylib;
   ffi.DynamicLibrary? _stdlib;
 
+  _GetHardwareConcurrencyDart? _rustGetHardwareConcurrency;
   _SecondsToTicksDart? _rustSecondsToTicks;
   _TicksToSecondsDart? _rustTicksToSeconds;
   _TicksToAudioSampleDart? _rustTicksToAudioSample;
@@ -299,6 +376,9 @@ class RustVideoBridge {
   _InterpolateDart? _rustInterpolate;
   _ComputeLumetriMatrixDart? _rustComputeLumetriMatrix;
   _BlendRgbaFramesDart? _rustBlendRgbaFrames;
+  _RgbaToBt709Yuv420StridedDart? _rustRgbaToBt709Yuv420Strided;
+  _ProcessRgbaBatchLumetriDart? _rustProcessRgbaBatchLumetri;
+  _RgbaBatchToBt709Nv12Dart? _rustRgbaBatchToBt709Nv12;
   _RgbaToNv12Dart? _rustRgbaToNv12;
   _MixPcm16OverlayDart? _rustMixPcm16Overlay;
   _MuxFramesToAviDart? _rustMuxFramesToAvi;
@@ -320,6 +400,15 @@ class RustVideoBridge {
       _rustInterpolate != null &&
       _rustComputeLumetriMatrix != null &&
       _rustMuxFramesToAvi != null;
+
+  /// عدد أنوية المعالج الفعلية لتحديد حجم دفعة الرندر المتوازي (Parallel Batch Size)
+  int getHardwareConcurrency() {
+    final rustFn = _rustGetHardwareConcurrency;
+    if (rustFn != null) {
+      return rustFn().clamp(2, 8);
+    }
+    return Platform.numberOfProcessors.clamp(2, 8);
+  }
 
   int secondsToTicks(double seconds) {
     final rustFn = _rustSecondsToTicks;
@@ -392,6 +481,11 @@ class RustVideoBridge {
             );
 
         try {
+          _rustGetHardwareConcurrency = lib
+              .lookupFunction<
+                _GetHardwareConcurrencyNative,
+                _GetHardwareConcurrencyDart
+              >('rust_get_hardware_concurrency');
           _rustSecondsToTicks = lib
               .lookupFunction<_SecondsToTicksNative, _SecondsToTicksDart>(
                 'rust_seconds_to_ticks',
@@ -426,6 +520,21 @@ class RustVideoBridge {
               .lookupFunction<_BlendRgbaFramesNative, _BlendRgbaFramesDart>(
                 'rust_blend_rgba_frames',
               );
+          _rustRgbaToBt709Yuv420Strided = lib
+              .lookupFunction<
+                _RgbaToBt709Yuv420StridedNative,
+                _RgbaToBt709Yuv420StridedDart
+              >('rust_rgba_to_bt709_yuv420_strided');
+          _rustProcessRgbaBatchLumetri = lib
+              .lookupFunction<
+                _ProcessRgbaBatchLumetriNative,
+                _ProcessRgbaBatchLumetriDart
+              >('rust_process_rgba_batch_lumetri');
+          _rustRgbaBatchToBt709Nv12 = lib
+              .lookupFunction<
+                _RgbaBatchToBt709Nv12Native,
+                _RgbaBatchToBt709Nv12Dart
+              >('rust_rgba_batch_to_bt709_nv12');
           _rustRgbaToNv12 = lib
               .lookupFunction<_RgbaToNv12Native, _RgbaToNv12Dart>(
                 'rust_rgba_to_nv12',
@@ -785,9 +894,86 @@ class RustVideoBridge {
     final invAlpha = 1.0 - alpha;
     final out = Uint8List(length);
     for (int i = 0; i < length; i++) {
-      out[i] = (frameA[i] * invAlpha + frameB[i] * alpha).round().clamp(0, 255);
+      out[i] = (frameA[i] * invAlpha + frameB[i] * alpha)
+          .round()
+          .clamp(0, 255);
     }
     return out;
+  }
+
+  /// معالجة دفعة كاملة من إطارات RGBA8888 بالتوازي عبر جميع أنوية المعالج في Rust (`rust_process_rgba_batch_lumetri`)
+  Uint8List processRgbaBatchLumetri({
+    required Uint8List rgbaBatchBytes,
+    required int numFrames,
+    required int width,
+    required int height,
+    required LumetriColorGrade grade,
+  }) {
+    final expected = numFrames * width * height * 4;
+    if (numFrames <= 0 || width <= 0 || height <= 0 || rgbaBatchBytes.length < expected) {
+      return rgbaBatchBytes;
+    }
+    final rustBatch = _rustProcessRgbaBatchLumetri;
+    if (rustBatch != null) {
+      final batchPtr = _alloc<ffi.Uint8>(expected);
+      if (batchPtr != ffi.nullptr) {
+        try {
+          batchPtr.asTypedList(expected).setRange(0, expected, rgbaBatchBytes);
+          final status = rustBatch(
+            batchPtr,
+            numFrames,
+            width,
+            height,
+            grade.exposure,
+            grade.contrast,
+            grade.saturation,
+            grade.temperature,
+            grade.fadedFilm,
+            grade.vignette,
+          );
+          if (status == 0) {
+            return Uint8List.fromList(batchPtr.asTypedList(expected));
+          }
+        } finally {
+          _freePtr(batchPtr);
+        }
+      }
+    }
+    return rgbaBatchBytes;
+  }
+
+  /// تحويل دفعة إطارات RGBA8888 بالتوازي عبر جميع أنوية المعالج في Rust (`rust_rgba_batch_to_bt709_nv12`)
+  Uint8List? convertRgbaBatchToBt709Nv12({
+    required Uint8List rgbaBatchBytes,
+    required int numFrames,
+    required int width,
+    required int height,
+  }) {
+    final rustBatch = _rustRgbaBatchToBt709Nv12;
+    final expectedRgba = numFrames * width * height * 4;
+    final expectedNv12 = numFrames * ((width * height * 3) ~/ 2);
+    if (rustBatch == null ||
+        numFrames <= 0 ||
+        width <= 0 ||
+        height <= 0 ||
+        rgbaBatchBytes.length < expectedRgba) {
+      return null;
+    }
+
+    final inPtr = _alloc<ffi.Uint8>(expectedRgba);
+    final outPtr = _alloc<ffi.Uint8>(expectedNv12);
+    try {
+      if (inPtr == ffi.nullptr || outPtr == ffi.nullptr) return null;
+      inPtr.asTypedList(expectedRgba).setRange(0, expectedRgba, rgbaBatchBytes);
+      final status = rustBatch(inPtr, outPtr, numFrames, width, height);
+      if (status == 0) {
+        return Uint8List.fromList(outPtr.asTypedList(expectedNv12));
+      }
+    } finally {
+      _freePtr(inPtr);
+      _freePtr(outPtr);
+    }
+    return null;
   }
 
   /// تحويل إطار RGBA8888 إلى فضاء ITU-R BT.709 YUV420 (NV12) عبر دالة Rust `rust_rgba_to_nv12`
@@ -906,9 +1092,11 @@ class RustVideoBridge {
       final ptr = _alloc<ffi.Uint8>(pcmBytes.length);
       if (ptr != ffi.nullptr) {
         try {
-          ptr
-              .asTypedList(pcmBytes.length)
-              .setRange(0, pcmBytes.length, pcmBytes);
+          ptr.asTypedList(pcmBytes.length).setRange(
+            0,
+            pcmBytes.length,
+            pcmBytes,
+          );
           final status = rustDsp(
             ptr,
             pcmBytes.length,
@@ -1027,9 +1215,11 @@ class RustVideoBridge {
 
       int status = -1;
       if (hasPcm && pcmPtr != ffi.nullptr) {
-        pcmPtr
-            .asTypedList(pcm16Audio.length)
-            .setRange(0, pcm16Audio.length, pcm16Audio);
+        pcmPtr.asTypedList(pcm16Audio.length).setRange(
+          0,
+          pcm16Audio.length,
+          pcm16Audio,
+        );
         status = _rustMuxFramesAndPcmToAvi!(
           pathPtr,
           pathBytes.length,
@@ -1386,6 +1576,8 @@ class RustVideoBridge {
     required int width,
     required int height,
     required int fps,
+    VideoExportConfig config = const VideoExportConfig(),
+    void Function(double progress, String status)? onProgress,
   }) async {
     final appDir = await getApplicationDocumentsDirectory();
     final exportDir = Directory('${appDir.path}/exported_videos');
@@ -1393,11 +1585,39 @@ class RustVideoBridge {
       await exportDir.create(recursive: true);
     }
 
+    // إذا كانت الإطارات الممررة فارغة أو ملتقطة كـ Screenshot منخفضة الدقة (< 1000px)،
+    // نعيد الرندر تلقائياً في الخلفية بدقة 1080p Full HD عبر محرك Offscreen المتوازي لمنع أي بكسلة
+    List<Uint8List> activeFrames = renderedFrames;
+    int activeWidth = width;
+    int activeHeight = height;
+    int activeFps = fps;
+
+    final (int targetW, int targetH) = config.resolveDimensions(
+      project.numericAspectRatio,
+    );
+    if (activeFrames.isEmpty ||
+        (math.max(activeWidth, activeHeight) < math.max(targetW, targetH))) {
+      final int offscreenFps = config.targetFps >= 60 ? 30 : math.max(20, fps);
+      final offscreenRendered =
+          await OffscreenVideoCompositor.renderProjectFramesParallel(
+            project: project,
+            config: config,
+            renderFps: offscreenFps,
+            onProgress: onProgress,
+          );
+      if (offscreenRendered.isNotEmpty) {
+        activeFrames = offscreenRendered;
+        activeWidth = targetW;
+        activeHeight = targetH;
+        activeFps = offscreenFps;
+      }
+    }
+
     final timestampMs = DateTime.now().millisecondsSinceEpoch;
     final baseName = 'love_reel_${project.id}_$timestampMs';
 
     final coverFile = File('${exportDir.path}/$baseName.png');
-    await coverFile.writeAsBytes(renderedFrames.first, flush: true);
+    await coverFile.writeAsBytes(activeFrames.first, flush: true);
 
     final preparedAudioPath = await _prepareAudioFileForExport(project);
     Uint8List? rustProcessedPcm;
@@ -1405,8 +1625,8 @@ class RustVideoBridge {
     int pcmSampleRate = 44100;
     int pcmChannels = 2;
 
-    final durationMs = ((renderedFrames.length / math.max(1, fps)) * 1000)
-        .round();
+    final durationMs =
+        ((activeFrames.length / math.max(1, activeFps)) * 1000).round();
 
     // 1. فك ترميز الموسيقى الخلفية + كافة المؤثرات الصوتية على خط الزمن ومزجها بدقة الـ Tick في Rust
     if (Platform.isAndroid &&
@@ -1466,7 +1686,8 @@ class RustVideoBridge {
             );
             if (sfxFile == null) continue;
 
-            final sfxPcmPath = '${tempDir.path}/sfx_${timestampMs}_$sfxIdx.pcm';
+            final sfxPcmPath =
+                '${tempDir.path}/sfx_${timestampMs}_$sfxIdx.pcm';
             final sfxDecoded = await _mediaChannel
                 .invokeMethod<Map<Object?, Object?>>('decodeAudioToPcmFile', {
                   'audioPath': sfxFile,
@@ -1500,14 +1721,16 @@ class RustVideoBridge {
       } catch (_) {}
     }
 
+    onProgress?.call(0.84, 'جاري تجميع حاوية الفيديو والصوت في Rust...');
+
     // 2. تجميع الإطارات (`00dc`) مع الصوت المتداخل (`01wb`) داخل حاوية RIFF/AVI عبر `rust_mux_frames_and_pcm_to_avi`
     final aviPath = '${exportDir.path}/$baseName.avi';
     await muxFramesToVideoContainer(
-      frames: renderedFrames,
+      frames: activeFrames,
       outputPath: aviPath,
-      width: width,
-      height: height,
-      fps: fps,
+      width: activeWidth,
+      height: activeHeight,
+      fps: activeFps,
       pcm16Audio: rustProcessedPcm,
       audioSampleRate: pcmSampleRate,
       audioChannels: pcmChannels,
@@ -1516,11 +1739,19 @@ class RustVideoBridge {
     String finalVideoPath = aviPath;
     final mp4Path = '${exportDir.path}/$baseName.mp4';
 
-    // 3. على أندرويد: ترميز عتادي مباشر إلى MP4 (BT.709 H.264 + AAC Audio) عبر MediaCodec + MediaMuxer
-    if (Platform.isAndroid) {
-      try {
-        final nativeMp4 = await _mediaChannel
-            .invokeMethod<String>('muxToMp4WithAudio', {
+    // إذا اختار المستخدم صيغة MP4 (H.264 أو H.265 HEVC)، نقوم بالترميز العتادي
+    if (config.format != VideoExportFormat.aviLossless) {
+      onProgress?.call(
+        0.90,
+        'جاري الترميز العتادي (${config.codecLabel} • ${config.resolutionLabel} • ${config.targetFps} FPS)...',
+      );
+
+      // 3. على أندرويد: ترميز عتادي مباشر إلى MP4 (BT.709 H.264/HEVC + AAC Audio) عبر MediaCodec + MediaMuxer
+      if (Platform.isAndroid) {
+        try {
+          final nativeMp4 = await _mediaChannel.invokeMethod<String>(
+            'muxToMp4WithAudio',
+            {
               'aviPath': aviPath,
               'outputMp4Path': mp4Path,
               'audioPath': preparedAudioPath,
@@ -1531,48 +1762,67 @@ class RustVideoBridge {
               'audioVolume': project.audioVolume,
               'audioFadeIn': project.audioFadeIn,
               'audioFadeOut': project.audioFadeOut,
-              'fps': fps,
-              'width': width,
-              'height': height,
-            });
-        if (nativeMp4 != null &&
-            nativeMp4.isNotEmpty &&
-            File(nativeMp4).existsSync() &&
-            File(nativeMp4).lengthSync() > 0) {
-          finalVideoPath = nativeMp4;
-        }
-      } catch (_) {}
-    }
-
-    // 4. على أنظمة سطح المكتب: استخدام FFmpeg إن توفر
-    if (finalVideoPath == aviPath) {
-      try {
-        final ffmpegArgs = <String>['-y', '-i', aviPath];
-        if (rustProcessedPcm == null &&
-            preparedAudioPath != null &&
-            File(preparedAudioPath).existsSync()) {
-          if (project.audioStartOffset > 0) {
-            ffmpegArgs.addAll([
-              '-ss',
-              project.audioStartOffset.toStringAsFixed(2),
-            ]);
+              'fps': activeFps,
+              'targetFps': config.targetFps,
+              'width': activeWidth,
+              'height': activeHeight,
+              'codecMime': config.codecMime,
+              'bitrateBps': config.bitrateBps,
+            },
+          );
+          if (nativeMp4 != null &&
+              nativeMp4.isNotEmpty &&
+              File(nativeMp4).existsSync() &&
+              File(nativeMp4).lengthSync() > 0) {
+            finalVideoPath = nativeMp4;
           }
-          ffmpegArgs.addAll(['-i', preparedAudioPath]);
-        }
-        ffmpegArgs.addAll(['-c:v', 'libx264', '-pix_fmt', 'yuv420p']);
-        if (rustProcessedPcm != null ||
-            (preparedAudioPath != null &&
-                File(preparedAudioPath).existsSync())) {
-          ffmpegArgs.addAll(['-c:a', 'aac', '-shortest']);
-        }
-        ffmpegArgs.add(mp4Path);
+        } catch (_) {}
+      }
 
-        final res = await Process.run('ffmpeg', ffmpegArgs);
-        if (res.exitCode == 0 && File(mp4Path).existsSync()) {
-          finalVideoPath = mp4Path;
-        }
-      } catch (_) {}
+      // 4. على أنظمة سطح المكتب: استخدام FFmpeg إن توفر
+      if (finalVideoPath == aviPath) {
+        try {
+          final ffmpegCodec = config.format == VideoExportFormat.mp4Hevc
+              ? 'libx265'
+              : 'libx264';
+          final ffmpegArgs = <String>['-y', '-i', aviPath];
+          if (rustProcessedPcm == null &&
+              preparedAudioPath != null &&
+              File(preparedAudioPath).existsSync()) {
+            if (project.audioStartOffset > 0) {
+              ffmpegArgs.addAll([
+                '-ss',
+                project.audioStartOffset.toStringAsFixed(2),
+              ]);
+            }
+            ffmpegArgs.addAll(['-i', preparedAudioPath]);
+          }
+          ffmpegArgs.addAll([
+            '-c:v',
+            ffmpegCodec,
+            '-pix_fmt',
+            'yuv420p',
+            '-r',
+            '${config.targetFps}',
+            '-b:v',
+            '${config.bitrateMbps}M',
+          ]);
+          if (rustProcessedPcm != null ||
+              (preparedAudioPath != null &&
+                  File(preparedAudioPath).existsSync())) {
+            ffmpegArgs.addAll(['-c:a', 'aac', '-shortest']);
+          }
+          ffmpegArgs.add(mp4Path);
+
+          final res = await Process.run('ffmpeg', ffmpegArgs);
+          if (res.exitCode == 0 && File(mp4Path).existsSync()) {
+            finalVideoPath = mp4Path;
+          }
+        } catch (_) {}
+      }
     }
+
+    onProgress?.call(0.97, 'جاري حفظ الفيديو في المعرض ومجلد التنزيلات...');
 
     final ext = finalVideoPath.split('.').last;
     final publicFileName = '$baseName.$ext';
@@ -1586,8 +1836,8 @@ class RustVideoBridge {
       ..['exportedVideoPath'] = finalVideoPath
       ..['publicVideoPath'] = publicPath ?? finalVideoPath
       ..['coverImagePath'] = coverFile.path
-      ..['renderedFramesCount'] = renderedFrames.length
-      ..['exportedFps'] = fps
+      ..['renderedFramesCount'] = activeFrames.length
+      ..['exportedFps'] = activeFps
       ..['exportedAt'] = DateTime.now().toIso8601String();
 
     await projectJsonFile.writeAsString(
@@ -1605,8 +1855,8 @@ class RustVideoBridge {
       projectJsonPath: projectJsonFile.path,
       videoFilePath: finalVideoPath,
       publicVideoPath: publicPath ?? finalVideoPath,
-      renderedFramesCount: renderedFrames.length,
-      fps: fps,
+      renderedFramesCount: activeFrames.length,
+      fps: activeFps,
       fileSizeBytes: fileBytes,
       exportedAt: DateTime.now(),
     );
@@ -1627,25 +1877,27 @@ class RustVideoBridge {
         try {
           final raw = await jsonFile.readAsString();
           final map = jsonDecode(raw) as Map<String, dynamic>;
-          final basePath = jsonFile.path.substring(0, jsonFile.path.length - 5);
+          final basePath = jsonFile.path.substring(
+            0,
+            jsonFile.path.length - 5,
+          );
           final mp4Candidate = '$basePath.mp4';
           final aviCandidate = '$basePath.avi';
           final pngCandidate = '$basePath.png';
 
-          final resolvedVideoPath =
-              (map['exportedVideoPath'] as String?) != null &&
+          final resolvedVideoPath = (map['exportedVideoPath'] as String?) !=
+                      null &&
                   File(map['exportedVideoPath'] as String).existsSync()
               ? (map['exportedVideoPath'] as String)
               : (File(mp4Candidate).existsSync() ? mp4Candidate : aviCandidate);
 
           if (!File(resolvedVideoPath).existsSync()) continue;
 
-          final resolvedCoverPath =
-              (map['coverImagePath'] as String?) ?? pngCandidate;
+          final resolvedCoverPath = (map['coverImagePath'] as String?) ??
+              pngCandidate;
           final publicPath =
               (map['publicVideoPath'] as String?) ?? resolvedVideoPath;
-          final framesCount =
-              (map['renderedFramesCount'] as num?)?.toInt() ?? 0;
+          final framesCount = (map['renderedFramesCount'] as num?)?.toInt() ?? 0;
           final fps = (map['exportedFps'] as num?)?.toInt() ?? 15;
           final exportedAt =
               DateTime.tryParse((map['exportedAt'] as String?) ?? '') ??
@@ -1732,4 +1984,72 @@ class ExportedVideoBundle {
   bool get isSavedInPublicDownloads =>
       publicVideoPath.contains('/Download/') ||
       publicVideoPath.contains('/Movies/');
+}
+
+/// صيغ وكودك تصدير الفيديو المدعومة
+enum VideoExportFormat {
+  mp4H264,
+  mp4Hevc,
+  aviLossless,
+}
+
+/// إعدادات الرندر والتصدير الاحترافية (الصيغة، الكودك، الدقة 1080p/720p، معدل الإطارات 30/60 FPS، وحجم الدفعة المتوازية)
+class VideoExportConfig {
+  final VideoExportFormat format;
+  final int resolutionShortSide; // 1080 (Full HD) or 720 (HD)
+  final int targetFps;           // 30 or 60 FPS
+  final int bitrateMbps;         // 8..16 Mbps
+  final int parallelBatchSize;   // 4..8 frames rendered concurrently
+
+  const VideoExportConfig({
+    this.format = VideoExportFormat.mp4H264,
+    this.resolutionShortSide = 1080,
+    this.targetFps = 30,
+    this.bitrateMbps = 14,
+    this.parallelBatchSize = 6,
+  });
+
+  String get codecMime => switch (format) {
+    VideoExportFormat.mp4Hevc => 'video/hevc',
+    _ => 'video/avc',
+  };
+
+  String get codecLabel => switch (format) {
+    VideoExportFormat.mp4H264 => 'MP4 (H.264 AVC)',
+    VideoExportFormat.mp4Hevc => 'MP4 (H.265 HEVC)',
+    VideoExportFormat.aviLossless => 'AVI (Motion-PNG Lossless)',
+  };
+
+  String get resolutionLabel =>
+      resolutionShortSide >= 1080 ? '1080p Full HD' : '720p HD';
+
+  int get bitrateBps => bitrateMbps * 1000000;
+
+  /// حساب أبعاد الرندر الخلفي الحقيقية (Offscreen True Resolution) بناءً على نسبة العرض إلى الارتفاع للمشروع
+  (int, int) resolveDimensions(double aspectRatio) {
+    final isFullHd = resolutionShortSide >= 1080;
+    if (aspectRatio < 0.8) {
+      return isFullHd ? (1080, 1920) : (720, 1280);
+    } else if (aspectRatio > 1.2) {
+      return isFullHd ? (1920, 1080) : (1280, 720);
+    } else {
+      return isFullHd ? (1080, 1080) : (720, 720);
+    }
+  }
+
+  VideoExportConfig copyWith({
+    VideoExportFormat? format,
+    int? resolutionShortSide,
+    int? targetFps,
+    int? bitrateMbps,
+    int? parallelBatchSize,
+  }) {
+    return VideoExportConfig(
+      format: format ?? this.format,
+      resolutionShortSide: resolutionShortSide ?? this.resolutionShortSide,
+      targetFps: targetFps ?? this.targetFps,
+      bitrateMbps: bitrateMbps ?? this.bitrateMbps,
+      parallelBatchSize: parallelBatchSize ?? this.parallelBatchSize,
+    );
+  }
 }
