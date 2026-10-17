@@ -1,3 +1,4 @@
+
 // lib/core/services/rust_video_bridge.dart
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -8,7 +9,6 @@ import 'package:flutter/services.dart' show MethodChannel, rootBundle;
 import 'package:path_provider/path_provider.dart';
 
 import '../../domain/entities/video_project_entity.dart';
-import 'offscreen_video_compositor.dart';
 
 // ─── FFI Struct & Signatures ──────────────────────────────────────────────────
 
@@ -1585,39 +1585,11 @@ class RustVideoBridge {
       await exportDir.create(recursive: true);
     }
 
-    // إذا كانت الإطارات الممررة فارغة أو ملتقطة كـ Screenshot منخفضة الدقة (< 1000px)،
-    // نعيد الرندر تلقائياً في الخلفية بدقة 1080p Full HD عبر محرك Offscreen المتوازي لمنع أي بكسلة
-    List<Uint8List> activeFrames = renderedFrames;
-    int activeWidth = width;
-    int activeHeight = height;
-    int activeFps = fps;
-
-    final (int targetW, int targetH) = config.resolveDimensions(
-      project.numericAspectRatio,
-    );
-    if (activeFrames.isEmpty ||
-        (math.max(activeWidth, activeHeight) < math.max(targetW, targetH))) {
-      final int offscreenFps = config.targetFps >= 60 ? 30 : math.max(20, fps);
-      final offscreenRendered =
-          await OffscreenVideoCompositor.renderProjectFramesParallel(
-            project: project,
-            config: config,
-            renderFps: offscreenFps,
-            onProgress: onProgress,
-          );
-      if (offscreenRendered.isNotEmpty) {
-        activeFrames = offscreenRendered;
-        activeWidth = targetW;
-        activeHeight = targetH;
-        activeFps = offscreenFps;
-      }
-    }
-
     final timestampMs = DateTime.now().millisecondsSinceEpoch;
     final baseName = 'love_reel_${project.id}_$timestampMs';
 
     final coverFile = File('${exportDir.path}/$baseName.png');
-    await coverFile.writeAsBytes(activeFrames.first, flush: true);
+    await coverFile.writeAsBytes(renderedFrames.first, flush: true);
 
     final preparedAudioPath = await _prepareAudioFileForExport(project);
     Uint8List? rustProcessedPcm;
@@ -1625,8 +1597,8 @@ class RustVideoBridge {
     int pcmSampleRate = 44100;
     int pcmChannels = 2;
 
-    final durationMs =
-        ((activeFrames.length / math.max(1, activeFps)) * 1000).round();
+    final durationMs = ((renderedFrames.length / math.max(1, fps)) * 1000)
+        .round();
 
     // 1. فك ترميز الموسيقى الخلفية + كافة المؤثرات الصوتية على خط الزمن ومزجها بدقة الـ Tick في Rust
     if (Platform.isAndroid &&
@@ -1726,11 +1698,11 @@ class RustVideoBridge {
     // 2. تجميع الإطارات (`00dc`) مع الصوت المتداخل (`01wb`) داخل حاوية RIFF/AVI عبر `rust_mux_frames_and_pcm_to_avi`
     final aviPath = '${exportDir.path}/$baseName.avi';
     await muxFramesToVideoContainer(
-      frames: activeFrames,
+      frames: renderedFrames,
       outputPath: aviPath,
-      width: activeWidth,
-      height: activeHeight,
-      fps: activeFps,
+      width: width,
+      height: height,
+      fps: fps,
       pcm16Audio: rustProcessedPcm,
       audioSampleRate: pcmSampleRate,
       audioChannels: pcmChannels,
@@ -1762,10 +1734,10 @@ class RustVideoBridge {
               'audioVolume': project.audioVolume,
               'audioFadeIn': project.audioFadeIn,
               'audioFadeOut': project.audioFadeOut,
-              'fps': activeFps,
+              'fps': fps,
               'targetFps': config.targetFps,
-              'width': activeWidth,
-              'height': activeHeight,
+              'width': width,
+              'height': height,
               'codecMime': config.codecMime,
               'bitrateBps': config.bitrateBps,
             },
@@ -1836,8 +1808,8 @@ class RustVideoBridge {
       ..['exportedVideoPath'] = finalVideoPath
       ..['publicVideoPath'] = publicPath ?? finalVideoPath
       ..['coverImagePath'] = coverFile.path
-      ..['renderedFramesCount'] = activeFrames.length
-      ..['exportedFps'] = activeFps
+      ..['renderedFramesCount'] = renderedFrames.length
+      ..['exportedFps'] = fps
       ..['exportedAt'] = DateTime.now().toIso8601String();
 
     await projectJsonFile.writeAsString(
@@ -1855,8 +1827,8 @@ class RustVideoBridge {
       projectJsonPath: projectJsonFile.path,
       videoFilePath: finalVideoPath,
       publicVideoPath: publicPath ?? finalVideoPath,
-      renderedFramesCount: activeFrames.length,
-      fps: activeFps,
+      renderedFramesCount: renderedFrames.length,
+      fps: fps,
       fileSizeBytes: fileBytes,
       exportedAt: DateTime.now(),
     );
