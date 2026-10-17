@@ -19,6 +19,7 @@ import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart' hide VideoAudioTrack;
 
 import '../../core/constants/app_constants.dart';
+import '../../core/errors/app_exception.dart';
 import '../../core/services/rust_video_bridge.dart';
 import '../../domain/entities/entities.dart';
 import '../../domain/entities/video_project_entity.dart';
@@ -65,6 +66,16 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
   bool _isPlaying = false;
   bool _isExporting = false;
   double _exportProgress = 0.0;
+  String _exportStatusText = '';
+  int _exportedFramesDone = 0;
+  int _exportTotalFrames = 0;
+  VideoExportConfig _exportConfig = const VideoExportConfig(
+    format: VideoExportFormat.mp4H264,
+    resolutionShortSide: 1080,
+    targetFps: 30,
+    bitrateMbps: 14,
+    parallelBatchSize: 6,
+  );
   Timer? _playbackTimer;
 
   double _gestureBaseScale = 1.0;
@@ -368,9 +379,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         return;
       }
 
-      await _studioBgmPlayer.setVolume(
-        _computeInstantAudioVolume(_playheadTime),
-      );
+      await _studioBgmPlayer.setVolume(_computeInstantAudioVolume(_playheadTime));
       final seekOffsetSeconds = _project.audioStartOffset + _playheadTime;
 
       if (_project.customAudioPath != null &&
@@ -950,11 +959,9 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     _gestureBaseY = (_gestureBaseY + dyNorm).clamp(-0.8, 0.8);
 
     final newScale = (_gestureBaseScale * details.scale).clamp(0.4, 2.5);
-    final newRotation =
-        (_gestureBaseRotation + (details.rotation * 180.0 / math.pi)).clamp(
-          -90.0,
-          90.0,
-        );
+    final newRotation = (_gestureBaseRotation +
+            (details.rotation * 180.0 / math.pi))
+        .clamp(-90.0, 90.0);
 
     _upsertKeyframeFromTouch(
       x: _gestureBaseX,
@@ -1374,60 +1381,113 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     _commitProjectChange(_project.copyWith(clips: updated));
   }
 
-  // ─── Real Frame-by-Frame Video Rendering & Export Pipeline ─────────────────
+  // ─── Offscreen True-1080p Parallel Batch Video Rendering & Export Pipeline ─
 
   Future<void> _exportVideo() async {
     if (_isExporting || _project.clips.isEmpty) return;
     _pausePlayback();
 
+    final chosenConfig = await _showExportConfigSheet();
+    if (chosenConfig == null || !mounted) return;
+
     setState(() {
+      _exportConfig = chosenConfig;
       _isExporting = true;
-      _exportProgress = 0.0;
+      _exportProgress = 0.02;
+      _exportedFramesDone = 0;
+      _exportTotalFrames = 0;
+      _exportStatusText = 'جاري تحميل الأصول الأصلية بدقة ${chosenConfig.resolutionLabel}...';
     });
 
+    final Map<String, ui.Image> preloadedImages = {};
     try {
-      const int exportFps = 15;
-      final double totalDur = _project.totalDuration.clamp(1.0, 30.0);
-      final int totalFrames = (totalDur * exportFps).round().clamp(15, 450);
-      final List<Uint8List> capturedFrames = [];
-      int frameWidth = 720;
-      int frameHeight = 1280;
+      // 1. تحميل الصور الأصلية كاملة الدقة مباشرة من الملفات بدون الاعتماد على ويدجت الشاشة المصغر
+      preloadedImages.addAll(await _preloadClipImagesForOffscreenExport());
 
-      for (int i = 0; i < totalFrames; i++) {
-        if (!mounted) return;
+      final (int frameWidth, int frameHeight) = chosenConfig.resolveDimensions(
+        _project.numericAspectRatio,
+      );
+      // لرندر سريع وفائق السلاسة: نرندر 30 إطاراً حقيقياً في الثانية (أو 20 إطاراً عند 60 FPS مع مضاعفة C-ABI/MediaCodec)
+      final int renderFps = chosenConfig.targetFps >= 60 ? 30 : 20;
+      final double totalDur = _project.totalDuration.clamp(1.0, 45.0);
+      final int totalFrames = (totalDur * renderFps).round().clamp(15, 900);
+      final int batchSize = chosenConfig.parallelBatchSize.clamp(2, 8);
+
+      final colorMatrix = RustVideoBridge.instance.computeLumetriColorMatrix(
+        _project.colorGrade,
+      );
+
+      if (mounted) {
         setState(() {
-          _playheadTime = (i / exportFps).clamp(0.0, totalDur);
-          _exportProgress = (i + 1) / totalFrames;
-          _syncSelectedClipWithPlayhead();
+          _exportTotalFrames = totalFrames;
+          _exportStatusText =
+              'رندر خلفي متوازي (${frameWidth}x$frameHeight • دفعات ×$batchSize)...';
         });
-
-        await WidgetsBinding.instance.endOfFrame;
-
-        final boundary =
-            _stageBoundaryKey.currentContext?.findRenderObject()
-                as RenderRepaintBoundary?;
-        if (boundary != null) {
-          final ui.Image img = await boundary.toImage(pixelRatio: 2.5);
-          frameWidth = img.width;
-          frameHeight = img.height;
-          final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-          if (byteData != null) {
-            capturedFrames.add(byteData.buffer.asUint8List());
-          }
-        }
       }
 
-      if (capturedFrames.isEmpty) {
+      final List<Uint8List> capturedFrames = List<Uint8List>.filled(
+        totalFrames,
+        Uint8List(0),
+      );
+
+      // 2. رندر الإطارات في الخلفية على دفعات متوازية (Parallel Batch Offscreen Rendering)
+      for (int batchStart = 0; batchStart < totalFrames; batchStart += batchSize) {
+        if (!mounted) return;
+        final int batchEnd = math.min(totalFrames, batchStart + batchSize);
+        final List<Future<Uint8List>> batchFutures = [];
+
+        for (int idx = batchStart; idx < batchEnd; idx++) {
+          final double timestampSec = (idx / renderFps).clamp(0.0, totalDur);
+          batchFutures.add(
+            _renderSingleFrameOffscreen(
+              timestampSeconds: timestampSec,
+              width: frameWidth,
+              height: frameHeight,
+              preloadedImages: preloadedImages,
+              colorMatrix: colorMatrix,
+            ),
+          );
+        }
+
+        final List<Uint8List> batchResults = await Future.wait(batchFutures);
+        for (int k = 0; k < batchResults.length; k++) {
+          capturedFrames[batchStart + k] = batchResults[k];
+        }
+
+        if (mounted) {
+          setState(() {
+            _exportedFramesDone = batchEnd;
+            // مرحلة الرندر الخلفي تمثل 80% من شريط التقدم، والـ 20% المتبقية للترميز العتادي ودمج الصوت
+            _exportProgress = (batchEnd / totalFrames) * 0.80;
+            _exportStatusText =
+                'تم رندر $batchEnd / $totalFrames إطار (${chosenConfig.resolutionLabel} • ×$batchSize متوازي)';
+          });
+        }
+        // إفساح المجال لـ Event Loop لتحديث شريط التقدم بسلاسة تامة بدون تجميد الواجهة
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      final validFrames = capturedFrames.where((f) => f.isNotEmpty).toList();
+      if (validFrames.isEmpty) {
         setState(() => _isExporting = false);
         return;
       }
 
+      // 3. تمرير الإطارات عالية الدقة إلى محرك Rust + MediaCodec العتادي
       final bundle = await RustVideoBridge.instance.exportVideoProject(
         project: _project,
-        renderedFrames: capturedFrames,
+        renderedFrames: validFrames,
         width: frameWidth,
         height: frameHeight,
-        fps: exportFps,
+        fps: renderFps,
+        config: chosenConfig,
+        onProgress: (prog, status) {
+          if (!mounted) return;
+          setState(() {
+            _exportProgress = prog.clamp(0.0, 1.0);
+            _exportStatusText = status;
+          });
+        },
       );
 
       String cloudVideoUrl = '';
@@ -1477,7 +1537,613 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('خطأ أثناء التصدير: $e')));
       }
+    } finally {
+      for (final img in preloadedImages.values) {
+        try {
+          img.dispose();
+        } catch (_) {}
+      }
     }
+  }
+
+  /// نافذة إعدادات التصدير الاحترافية (اختيار الصيغة MP4 H.264 / HEVC H.265 / AVI، الدقة 1080p/720p، ومعدل الإطارات 30/60 FPS)
+  Future<VideoExportConfig?> _showExportConfigSheet() async {
+    VideoExportFormat selectedFormat = _exportConfig.format;
+    int selectedRes = _exportConfig.resolutionShortSide;
+    int selectedFps = _exportConfig.targetFps;
+    final int cpuCores = RustVideoBridge.instance.getHardwareConcurrency();
+    int selectedBatch = _exportConfig.parallelBatchSize.clamp(2, cpuCores.clamp(4, 8));
+
+    return showModalBottomSheet<VideoExportConfig>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final int autoBitrate = selectedRes >= 1080 ? 14 : 8;
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.tune_rounded,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'إعدادات الرندر والتصدير الاحترافي 🎬',
+                            style: GoogleFonts.notoSerif(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'Rust Multi-Core ×$cpuCores',
+                            style: GoogleFonts.manrope(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'يتم الرندر في الخلفية مباشرة من الصور الأصلية كاملة الدقة عبر محرك Offscreen Canvas لمنع أي بكسلة.',
+                      style: GoogleFonts.manrope(
+                        fontSize: 11.5,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      '1. صيغة الفيديو والكودك (Format & Codec)',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('MP4 (H.264 شائع)'),
+                          selected: selectedFormat == VideoExportFormat.mp4H264,
+                          onSelected: (_) => setSheetState(
+                            () => selectedFormat = VideoExportFormat.mp4H264,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('MP4 (H.265 HEVC فائق)'),
+                          selected: selectedFormat == VideoExportFormat.mp4Hevc,
+                          onSelected: (_) => setSheetState(
+                            () => selectedFormat = VideoExportFormat.mp4Hevc,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('AVI (خام بدون ضغط)'),
+                          selected:
+                              selectedFormat == VideoExportFormat.aviLossless,
+                          onSelected: (_) => setSheetState(
+                            () => selectedFormat = VideoExportFormat.aviLossless,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      '2. دقة الرندر (Resolution & Bitrate)',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Text('1080p Full HD (14 Mbps)'),
+                            selected: selectedRes == 1080,
+                            onSelected: (_) =>
+                                setSheetState(() => selectedRes = 1080),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Text('720p HD (8 Mbps)'),
+                            selected: selectedRes == 720,
+                            onSelected: (_) =>
+                                setSheetState(() => selectedRes = 720),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      '3. معدل الإطارات والدفعات المتوازية (FPS & Parallel Batch)',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        ChoiceChip(
+                          label: const Text('30 FPS'),
+                          selected: selectedFps == 30,
+                          onSelected: (_) =>
+                              setSheetState(() => selectedFps = 30),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: const Text('60 FPS سلس جداً'),
+                          selected: selectedFps == 60,
+                          onSelected: (_) =>
+                              setSheetState(() => selectedFps = 60),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'دفعات متوازية: ×$selectedBatch',
+                          style: GoogleFonts.manrope(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.rocket_launch_rounded, size: 18),
+                        label: Text(
+                          'بدء الرندر والتصدير في الخلفية (${selectedRes}p • $selectedFps FPS)',
+                          style: GoogleFonts.manrope(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(
+                            ctx,
+                            VideoExportConfig(
+                              format: selectedFormat,
+                              resolutionShortSide: selectedRes,
+                              targetFps: selectedFps,
+                              bitrateMbps: autoBitrate,
+                              parallelBatchSize: selectedBatch,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// تحميل الصور الأصلية كاملة الدقة في الذاكرة قبل بدء الرندر الخلفي لمنع أي بكسلة ناتجة عن لقطات الشاشة
+  Future<Map<String, ui.Image>> _preloadClipImagesForOffscreenExport() async {
+    final Map<String, ui.Image> result = {};
+    for (final clip in _project.clips) {
+      if (clip.sourceType == VideoClipSourceType.romanticCard) continue;
+      try {
+        Uint8List? rawBytes;
+        if (clip.localPath != null &&
+            clip.localPath!.isNotEmpty &&
+            File(clip.localPath!).existsSync()) {
+          rawBytes = await File(clip.localPath!).readAsBytes();
+        } else if (clip.networkUrl != null && clip.networkUrl!.isNotEmpty) {
+          final uri = Uri.tryParse(clip.networkUrl!);
+          if (uri != null) {
+            final client = HttpClient();
+            final req = await client.getUrl(uri);
+            final resp = await req.close();
+            if (resp.statusCode == 200) {
+              final builder = BytesBuilder(copy: false);
+              await for (final chunk in resp) {
+                builder.add(chunk);
+              }
+              rawBytes = builder.takeBytes();
+            }
+            client.close();
+          }
+        }
+        if (rawBytes != null && rawBytes.isNotEmpty) {
+          final codec = await ui.instantiateImageCodec(rawBytes);
+          final frameInfo = await codec.getNextFrame();
+          result[clip.id] = frameInfo.image;
+        }
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  /// رندر إطار واحد في الخلفية بدقة 1080p/720p الحقيقية عبر `ui.PictureRecorder` بدون لمس شاشة العرض
+  Future<Uint8List> _renderSingleFrameOffscreen({
+    required double timestampSeconds,
+    required int width,
+    required int height,
+    required Map<String, ui.Image> preloadedImages,
+    required List<double> colorMatrix,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(
+      recorder,
+      Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    );
+    final double w = width.toDouble();
+    final double h = height.toDouble();
+    final double scaleFactor = w / 360.0;
+
+    // 1. خلفية الاستوديو الداكنة
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, w, h),
+      Paint()..color = AppTheme.studioCanvasBg,
+    );
+
+    if (_project.clips.isNotEmpty) {
+      int activeIdx = 0;
+      double clipStart = 0.0;
+      for (int i = 0; i < _project.clips.length; i++) {
+        final d = _project.clips[i].durationSeconds;
+        if (timestampSeconds <= clipStart + d ||
+            i == _project.clips.length - 1) {
+          activeIdx = i;
+          break;
+        }
+        clipStart += d;
+      }
+
+      final currentClip = _project.clips[activeIdx];
+      final localTime = (timestampSeconds - clipStart).clamp(
+        0.0,
+        currentClip.durationSeconds,
+      );
+      final kf = RustVideoBridge.instance.evaluateKeyframes(
+        currentClip.keyframes,
+        localTime,
+      );
+
+      final transDur = currentClip.transitionDuration.clamp(
+        0.1,
+        currentClip.durationSeconds,
+      );
+      final isInTransition =
+          activeIdx > 0 &&
+          currentClip.transition != VideoTransitionType.none &&
+          localTime < transDur;
+      final transProgress = isInTransition
+          ? (localTime / transDur).clamp(0.0, 1.0)
+          : 1.0;
+
+      // 2. طبقة تصحيح الألوان السينمائية Lumetri Color Matrix (ITU-R BT.709)
+      canvas.saveLayer(
+        Rect.fromLTWH(0, 0, w, h),
+        Paint()..colorFilter = ColorFilter.matrix(colorMatrix),
+      );
+
+      if (isInTransition && activeIdx > 0) {
+        final prevClip = _project.clips[activeIdx - 1];
+        final prevKf = RustVideoBridge.instance.evaluateKeyframes(
+          prevClip.keyframes,
+          prevClip.durationSeconds,
+        );
+        _drawClipLayerOnOffscreenCanvas(
+          canvas: canvas,
+          clip: prevClip,
+          kf: prevKf,
+          width: w,
+          height: h,
+          scaleFactor: scaleFactor,
+          preloadedImages: preloadedImages,
+          extraOpacity: (1.0 - transProgress).clamp(0.0, 1.0),
+          transition: VideoTransitionType.none,
+          transitionProgress: 1.0,
+        );
+      }
+
+      _drawClipLayerOnOffscreenCanvas(
+        canvas: canvas,
+        clip: currentClip,
+        kf: kf,
+        width: w,
+        height: h,
+        scaleFactor: scaleFactor,
+        preloadedImages: preloadedImages,
+        extraOpacity: 1.0,
+        transition: isInTransition
+            ? currentClip.transition
+            : VideoTransitionType.none,
+        transitionProgress: transProgress,
+      );
+
+      canvas.restore();
+    }
+
+    // 3. طبقة التظليل الدائري (Radial Vignette)
+    final vignetteAmount = _project.colorGrade.vignette.clamp(0.0, 0.85);
+    if (vignetteAmount > 0.01) {
+      final center = Offset(w * 0.5, h * 0.5);
+      final radius = math.max(w, h) * 0.65;
+      final vigPaint = Paint()
+        ..shader = ui.Gradient.radial(
+          center,
+          radius,
+          [
+            const Color(0x00000000),
+            Color.fromRGBO(0, 0, 0, vignetteAmount),
+          ],
+          const [0.45, 1.0],
+        );
+      canvas.drawRect(Rect.fromLTWH(0, 0, w, h), vigPaint);
+    }
+
+    // 4. رسم طبقات النصوص المتجهة (Vector Text Overlays) بدقة التصدير الكاملة بدون أي بكسلة
+    for (final txt in _project.textTracks) {
+      if (timestampSeconds >= txt.startTime &&
+          timestampSeconds <= txt.endTime) {
+        _drawTextTrackOnOffscreenCanvas(
+          canvas: canvas,
+          track: txt,
+          localTime: timestampSeconds - txt.startTime,
+          width: w,
+          height: h,
+          scaleFactor: scaleFactor,
+        );
+      }
+    }
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(width, height);
+    try {
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+      picture.dispose();
+      if (byteData != null) {
+        return byteData.buffer.asUint8List();
+      }
+    } finally {
+      img.dispose();
+    }
+    return Uint8List(0);
+  }
+
+  void _drawClipLayerOnOffscreenCanvas({
+    required Canvas canvas,
+    required VideoClipItem clip,
+    required KeyframePoint kf,
+    required double width,
+    required double height,
+    required double scaleFactor,
+    required Map<String, ui.Image> preloadedImages,
+    required double extraOpacity,
+    required VideoTransitionType transition,
+    required double transitionProgress,
+  }) {
+    double opacity = (kf.opacity * extraOpacity).clamp(0.0, 1.0);
+    double tx = kf.x * width;
+    double ty = kf.y * height;
+    double scale = kf.scale.clamp(0.1, 5.0);
+    final double rotRad = kf.rotation * (math.pi / 180.0);
+
+    switch (transition) {
+      case VideoTransitionType.none:
+        break;
+      case VideoTransitionType.crossDissolve:
+        opacity *= transitionProgress.clamp(0.0, 1.0);
+        break;
+      case VideoTransitionType.slideLeft:
+        tx += (1.0 - transitionProgress) * width;
+        break;
+      case VideoTransitionType.zoomIn:
+        opacity *= transitionProgress.clamp(0.0, 1.0);
+        scale *= (0.6 + 0.4 * transitionProgress);
+        break;
+      case VideoTransitionType.heartPulse:
+        opacity *= transitionProgress.clamp(0.0, 1.0);
+        scale *= (1.0 + 0.15 * math.sin(transitionProgress * math.pi));
+        break;
+      case VideoTransitionType.dreamyBlur:
+        opacity *= transitionProgress.clamp(0.0, 1.0);
+        break;
+    }
+
+    if (opacity <= 0.005) return;
+
+    canvas.save();
+    if (transition == VideoTransitionType.dreamyBlur &&
+        transitionProgress < 0.99) {
+      final sigma = (1.0 - transitionProgress) * 14.0 * scaleFactor;
+      canvas.saveLayer(
+        Rect.fromLTWH(0, 0, width, height),
+        Paint()
+          ..color = Color.fromRGBO(255, 255, 255, opacity)
+          ..imageFilter = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+      );
+    } else if (opacity < 0.999) {
+      canvas.saveLayer(
+        Rect.fromLTWH(0, 0, width, height),
+        Paint()..color = Color.fromRGBO(255, 255, 255, opacity),
+      );
+    }
+
+    canvas.translate(width * 0.5 + tx, height * 0.5 + ty);
+    canvas.rotate(rotRad);
+    canvas.scale(scale, scale);
+    canvas.translate(-width * 0.5, -height * 0.5);
+
+    final ui.Image? nativeImg = preloadedImages[clip.id];
+    if (nativeImg != null && clip.sourceType != VideoClipSourceType.romanticCard) {
+      final srcSize = Size(
+        nativeImg.width.toDouble(),
+        nativeImg.height.toDouble(),
+      );
+      final dstSize = Size(width, height);
+      final fitted = applyBoxFit(BoxFit.cover, srcSize, dstSize);
+      final srcRect = Alignment.center.inscribe(
+        fitted.source,
+        Offset.zero & srcSize,
+      );
+      final dstRect = Alignment.center.inscribe(
+        fitted.destination,
+        Offset.zero & dstSize,
+      );
+      canvas.drawImageRect(
+        nativeImg,
+        srcRect,
+        dstRect,
+        Paint()
+          ..filterQuality = FilterQuality.high
+          ..isAntiAlias = true,
+      );
+    } else {
+      final gradColors = AppTheme.studioCardGradient(clip.cardColorValue);
+      final rect = Rect.fromLTWH(0, 0, width, height);
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset.zero,
+            Offset(width, height),
+            gradColors,
+          ),
+      );
+
+      final titlePainter = TextPainter(
+        text: TextSpan(
+          text: '❤️\n${clip.title}',
+          style: GoogleFonts.notoSerif(
+            color: const Color(0xFFFFFFFF),
+            fontSize: 24.0 * scaleFactor,
+            fontWeight: FontWeight.bold,
+            height: 1.4,
+          ),
+        ),
+        textAlign: TextAlign.center,
+        textDirection: TextDirection.rtl,
+      )..layout(maxWidth: width * 0.82);
+
+      titlePainter.paint(
+        canvas,
+        Offset(
+          (width - titlePainter.width) * 0.5,
+          (height - titlePainter.height) * 0.5,
+        ),
+      );
+    }
+
+    if ((transition == VideoTransitionType.dreamyBlur &&
+            transitionProgress < 0.99) ||
+        opacity < 0.999) {
+      canvas.restore();
+    }
+    canvas.restore();
+  }
+
+  void _drawTextTrackOnOffscreenCanvas({
+    required Canvas canvas,
+    required VideoTextTrack track,
+    required double localTime,
+    required double width,
+    required double height,
+    required double scaleFactor,
+  }) {
+    final kf = RustVideoBridge.instance.evaluateKeyframes(
+      track.keyframes,
+      localTime,
+    );
+    final opacity = kf.opacity.clamp(0.0, 1.0);
+    if (opacity <= 0.01) return;
+
+    final scaledFontSize = track.fontSize * scaleFactor;
+    final baseColor = AppTheme.fromCode(track.colorValue).withValues(
+      alpha: opacity,
+    );
+    final TextStyle font = switch (track.fontStyle) {
+      'script' => GoogleFonts.dancingScript(
+        fontSize: scaledFontSize,
+        color: baseColor,
+        fontWeight: FontWeight.bold,
+      ),
+      'sans' => GoogleFonts.manrope(
+        fontSize: scaledFontSize,
+        color: baseColor,
+        fontWeight: FontWeight.bold,
+      ),
+      _ => GoogleFonts.notoSerif(
+        fontSize: scaledFontSize,
+        color: baseColor,
+        fontWeight: FontWeight.bold,
+      ),
+    };
+
+    final tp = TextPainter(
+      text: TextSpan(text: track.text, style: font),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.rtl,
+    )..layout(maxWidth: width * 0.84);
+
+    final padH = 16.0 * scaleFactor;
+    final padV = 10.0 * scaleFactor;
+    final boxW = tp.width + padH * 2;
+    final boxH = tp.height + padV * 2;
+
+    canvas.save();
+    canvas.translate(width * 0.5 + kf.x * width, height * 0.5 + kf.y * height);
+    canvas.rotate(kf.rotation * (math.pi / 180.0));
+    canvas.scale(kf.scale.clamp(0.1, 5.0));
+
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset.zero, width: boxW, height: boxH),
+      Radius.circular(16.0 * scaleFactor),
+    );
+    canvas.drawRRect(
+      rrect,
+      Paint()..color = Color.fromRGBO(0, 0, 0, 0.45 * opacity),
+    );
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = Color.fromRGBO(255, 255, 255, 0.25 * opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2 * scaleFactor,
+    );
+
+    tp.paint(canvas, Offset(-tp.width * 0.5, -tp.height * 0.5));
+    canvas.restore();
   }
 
   void _showExportSuccessDialog(ExportedVideoBundle bundle) {
@@ -1559,9 +2225,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                             );
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text(
-                                  'تم نسخ مسار الفيديو إلى الحافظة 📋',
-                                ),
+                                content: Text('تم نسخ مسار الفيديو إلى الحافظة 📋'),
                               ),
                             );
                           },
@@ -1794,6 +2458,72 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
       ),
       body: Column(
         children: [
+          if (_isExporting)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+                border: Border(
+                  bottom: BorderSide(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.25),
+                  ),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _exportStatusText.isNotEmpty
+                              ? _exportStatusText
+                              : 'جاري الرندر الخلفي المتوازي...',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.manrope(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${(_exportProgress * 100).round()}%',
+                        style: GoogleFonts.manrope(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: _exportProgress.clamp(0.0, 1.0),
+                      minHeight: 6,
+                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // 1. Live Interactive Stage Preview
           Expanded(
             flex: 5,
@@ -2921,8 +3651,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
 
         // 4. تعديل توقيت المفتاح الزمني + خصائص التحويل الدقيقة
         _buildFineSliderRow(
-          label:
-              'توقيت المفتاح (Timestamp): ${kf.timestamp.toStringAsFixed(2)}s',
+          label: 'توقيت المفتاح (Timestamp): ${kf.timestamp.toStringAsFixed(2)}s',
           value: kf.timestamp.clamp(0.0, maxDur),
           min: 0.0,
           max: maxDur,
@@ -2990,7 +3719,10 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         const SizedBox(height: 8),
         Text(
           'منحنى الحركة بين المفاتيح (Keyframe Easing):',
-          style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.bold),
+          style: GoogleFonts.manrope(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 6),
         Wrap(
@@ -3544,8 +4276,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
           ),
         ),
         _buildSliderRow(
-          label:
-              'دفء الألوان (Temperature): ${g.temperature.toStringAsFixed(2)}',
+          label: 'دفء الألوان (Temperature): ${g.temperature.toStringAsFixed(2)}',
           value: g.temperature.clamp(-1.0, 1.0),
           min: -1.0,
           max: 1.0,
@@ -3710,10 +4441,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                       );
                     },
               icon: const Icon(Icons.volume_off_rounded, size: 17),
-              label: const Text(
-                'بدون موسيقى',
-                style: TextStyle(fontSize: 11.5),
-              ),
+              label: const Text('بدون موسيقى', style: TextStyle(fontSize: 11.5)),
             ),
           ],
         ),
@@ -4399,8 +5127,7 @@ class _ExportedVideoPlayerDialogState
           jsonDecode(raw) as Map<String, dynamic>,
         );
       }
-      final aviCandidate =
-          widget.bundle.videoFilePath.toLowerCase().endsWith('.avi')
+      final aviCandidate = widget.bundle.videoFilePath.toLowerCase().endsWith('.avi')
           ? widget.bundle.videoFilePath
           : widget.bundle.projectJsonPath.replaceAll('.json', '.avi');
       final extracted = await RustVideoBridge.instance.extractFramesFromAvi(
