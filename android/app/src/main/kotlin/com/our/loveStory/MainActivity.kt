@@ -108,9 +108,12 @@ class MainActivity : FlutterFragmentActivity() {
                         val audioVolume = (call.argument<Number>("audioVolume")?.toDouble() ?: 0.85)
                         val audioFadeIn = call.argument<Boolean>("audioFadeIn") ?: true
                         val audioFadeOut = call.argument<Boolean>("audioFadeOut") ?: true
-                        val sourceFps = (call.argument<Number>("fps")?.toInt() ?: 15).coerceAtLeast(1)
-                        val rawWidth = (call.argument<Number>("width")?.toInt() ?: 720)
-                        val rawHeight = (call.argument<Number>("height")?.toInt() ?: 1280)
+                        val sourceFps = (call.argument<Number>("fps")?.toInt() ?: 30).coerceAtLeast(1)
+                        val requestedTargetFps = (call.argument<Number>("targetFps")?.toInt() ?: sourceFps).coerceAtLeast(sourceFps)
+                        val rawWidth = (call.argument<Number>("width")?.toInt() ?: 1080)
+                        val rawHeight = (call.argument<Number>("height")?.toInt() ?: 1920)
+                        val codecMime = call.argument<String>("codecMime") ?: MediaFormat.MIMETYPE_VIDEO_AVC
+                        val bitrateBps = (call.argument<Number>("bitrateBps")?.toInt() ?: 12_000_000).coerceIn(2_000_000, 24_000_000)
 
                         if (aviPath.isNullOrBlank() || outputMp4Path.isNullOrBlank()) {
                             result.error("INVALID_ARGS", "Missing aviPath or outputMp4Path", null)
@@ -131,8 +134,11 @@ class MainActivity : FlutterFragmentActivity() {
                                     audioFadeIn = audioFadeIn,
                                     audioFadeOut = audioFadeOut,
                                     sourceFps = sourceFps,
+                                    requestedTargetFps = requestedTargetFps,
                                     requestedWidth = rawWidth,
-                                    requestedHeight = rawHeight
+                                    requestedHeight = rawHeight,
+                                    requestedCodecMime = codecMime,
+                                    requestedBitrateBps = bitrateBps
                                 )
                                 runOnUiThread {
                                     result.success(mp4File.absolutePath)
@@ -214,35 +220,54 @@ class MainActivity : FlutterFragmentActivity() {
         audioFadeIn: Boolean,
         audioFadeOut: Boolean,
         sourceFps: Int,
+        requestedTargetFps: Int = 30,
         requestedWidth: Int,
-        requestedHeight: Int
+        requestedHeight: Int,
+        requestedCodecMime: String = MediaFormat.MIMETYPE_VIDEO_AVC,
+        requestedBitrateBps: Int = 12_000_000
     ): File {
         val frames = extractPngFramesFromAvi(File(aviPath))
         if (frames.isEmpty()) {
             throw IllegalStateException("No frames found in AVI container")
         }
 
-        // تحديد أبعاد HD قياسية مضاعفة للرقم 16 لضمان التوافق التام مع كافة معالجات H.264 في المعرض
+        // دعم دقة 1080p Full HD و 720p HD مع محاذاة زوجية متوافقة مع كافة معالجات MediaCodec العتادية
+        val isFullHd = max(requestedWidth, requestedHeight) >= 1400 || min(requestedWidth, requestedHeight) >= 1000
         val aspect = requestedWidth.toDouble() / max(1, requestedHeight).toDouble()
         val (encWidth, encHeight) = when {
-            aspect < 0.8 -> Pair(720, 1280)   // 9:16 Portrait HD
-            aspect > 1.2 -> Pair(1280, 720)   // 16:9 Landscape HD
-            else -> Pair(1080, 1080)          // 1:1 Square HD
+            aspect < 0.8 -> if (isFullHd) Pair(1080, 1920) else Pair(720, 1280)   // 9:16 Portrait (1080p / 720p)
+            aspect > 1.2 -> if (isFullHd) Pair(1920, 1080) else Pair(1280, 720)   // 16:9 Landscape (1080p / 720p)
+            else -> if (isFullHd) Pair(1080, 1080) else Pair(720, 720)            // 1:1 Square (1080p / 720p)
         }
 
-        val repeatFactor = if (sourceFps <= 15) 2 else 1
-        val targetFps = sourceFps * repeatFactor
+        val repeatFactor = max(1, (requestedTargetFps + sourceFps / 2) / max(1, sourceFps))
+        val targetFps = (sourceFps * repeatFactor).coerceIn(15, 60)
         val totalOutputFrames = frames.size * repeatFactor
         val totalDurationUs = (totalOutputFrames.toLong() * 1_000_000L) / targetFps.toLong()
 
-        // 1. ترميز الفيديو إلى H.264 (AVC) بمعيار الألوان القياسي ITU-R BT.709 (8 Mbps)
-        val (videoFormat, videoPackets) = encodeFramesToH264(
-            pngFrames = frames,
-            width = encWidth,
-            height = encHeight,
-            targetFps = targetFps,
-            repeatFactor = repeatFactor
-        )
+        // 1. ترميز الفيديو عتادياً إلى H.264 (AVC) أو H.265 (HEVC) بمعيار ITU-R BT.709 Studio-Swing
+        val (videoFormat, videoPackets) = try {
+            encodeFramesToH264(
+                pngFrames = frames,
+                width = encWidth,
+                height = encHeight,
+                targetFps = targetFps,
+                repeatFactor = repeatFactor,
+                codecMime = requestedCodecMime,
+                bitrateBps = requestedBitrateBps
+            )
+        } catch (_: Exception) {
+            // في حال عدم دعم المعالج لـ HEVC أو 1080p، الانتقال التلقائي الآمن إلى H.264 القياسي
+            encodeFramesToH264(
+                pngFrames = frames,
+                width = if (aspect < 0.8) 720 else if (aspect > 1.2) 1280 else 720,
+                height = if (aspect < 0.8) 1280 else if (aspect > 1.2) 720 else 720,
+                targetFps = 30,
+                repeatFactor = max(1, 30 / max(1, sourceFps)),
+                codecMime = MediaFormat.MIMETYPE_VIDEO_AVC,
+                bitrateBps = 8_000_000
+            )
+        }
 
         // 2. ترميز الصوت إلى AAC-LC (من مخرجات مازج Rust متعدد المسارات أو من ملف الصوت مباشرة)
         var audioFormat: MediaFormat? = null
@@ -366,15 +391,21 @@ class MainActivity : FlutterFragmentActivity() {
         width: Int,
         height: Int,
         targetFps: Int,
-        repeatFactor: Int
+        repeatFactor: Int,
+        codecMime: String = MediaFormat.MIMETYPE_VIDEO_AVC,
+        bitrateBps: Int = 12_000_000
     ): Pair<MediaFormat, List<EncodedPacket>> {
-        val mime = MediaFormat.MIMETYPE_VIDEO_AVC
+        val mime = if (codecMime.equals("video/hevc", ignoreCase = true)) {
+            MediaFormat.MIMETYPE_VIDEO_HEVC
+        } else {
+            MediaFormat.MIMETYPE_VIDEO_AVC
+        }
         val format = MediaFormat.createVideoFormat(mime, width, height).apply {
             setInteger(
                 MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
             )
-            setInteger(MediaFormat.KEY_BIT_RATE, 8_000_000) // 8 Mbps Full HD Quality
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
             setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
             // ضبط معايير الألوان ITU-R BT.709 Studio-Swing لتطابق ألوان شاشة الاستوديو مع المعرض
