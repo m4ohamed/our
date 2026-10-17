@@ -1,8 +1,8 @@
 // lib/core/services/offscreen_video_compositor.dart
-// محرك رندر خلفي مستقل عن الشاشة (Offscreen True-1080p Parallel Batch Compositor)
+// محرك رندر خلفي مستقل عن الشاشة (Offscreen True-Resolution Parallel Batch Compositor)
 // يرسم الصور الأصلية كاملة الدقة والانتقالات ومصفوفات ألوان Lumetri والنصوص المتجهة
 // مباشرة على `ui.PictureRecorder` + `ui.Canvas` بأبعاد 1080x1920 (Full HD) أو 720x1280 (HD)
-// على دفعات متوازية (Parallel Batches) دون الاعتماد على حجم ويدجت المعاينة المصغر.
+// على دفعات متوازية محدودة السعة (Bounded Parallel Batches) دون الاعتماد على حجم ويدجت المعاينة.
 
 import 'dart:async';
 import 'dart:io';
@@ -20,44 +20,91 @@ import 'rust_video_bridge.dart';
 class OffscreenVideoCompositor {
   OffscreenVideoCompositor._();
 
-  /// رندر جميع إطارات المشروع في الخلفية بدقة 1080p/720p الحقيقية على دفعات متوازية
-  static Future<List<Uint8List>> renderProjectFramesParallel({
+  /// رندر إطارات المشروع على دفعات متوازية محدودة الذاكرة مع تمرير كل دفعة فور جاهزيتها (VID-003 / VID-015 / VID-016)
+  static Future<int> renderProjectFramesStreamed({
     required VideoProjectEntity project,
     required VideoExportConfig config,
-    required int renderFps,
+    int? renderFps,
+    VideoExportCancelToken? cancelToken,
     void Function(double progress, String status)? onProgress,
+    required FutureOr<void> Function(
+      int batchStartFrame,
+      List<Uint8List> batchPngFrames,
+      int width,
+      int height,
+      int effectiveFps,
+    )
+    onBatchReady,
   }) async {
-    if (project.clips.isEmpty) return const [];
+    if (project.clips.isEmpty) {
+      throw const VideoExportException(
+        stage: VideoExportStage.preparing,
+        message: 'لا يمكن رندر مشروع فارغ لا يحتوي على مقاطع.',
+      );
+    }
+
+    if (!project.colorGrade.hasValidParameters) {
+      throw const VideoExportException(
+        stage: VideoExportStage.preparing,
+        message: 'إعدادات تصحيح الألوان Lumetri تحتوي على قيم غير صالحة.',
+      );
+    }
+
+    cancelToken?.throwIfCancelled(VideoExportStage.preparing);
+
+    final (int width, int height) = config.resolveDimensions(
+      project.numericAspectRatio,
+    );
+    if (width <= 0 || height <= 0 || width.isOdd || height.isOdd) {
+      throw VideoExportException(
+        stage: VideoExportStage.preparing,
+        message:
+            'أبعاد التصدير (${width}x$height) غير صالحة؛ يجب أن تكون أعداداً موجبة زوجية.',
+      );
+    }
+
+    final int effectiveFps = (renderFps ?? config.targetFps).clamp(15, 60);
+    final double totalDur = project.totalDuration;
+    if (totalDur <= 0.0) {
+      throw const VideoExportException(
+        stage: VideoExportStage.preparing,
+        message: 'مدة المشروع يجب أن تكون أكبر من الصفر.',
+      );
+    }
+
+    // حساب عدد الإطارات الفعلي بدقة من المدة ومعدل الإطارات المستهدف دون اقتطاع تعسفي عند 900 إطار (VID-002)
+    final int totalFrames = math.max(1, (totalDur * effectiveFps).round());
+    final int batchSize = config.parallelBatchSize.clamp(2, 8);
 
     onProgress?.call(
       0.04,
-      'جاري تحميل الصور الأصلية بدقة ${config.resolutionLabel}...',
+      'التحضير: جاري تحميل الصور الأصلية بدقة ${config.resolutionLabel}...',
     );
 
-    final preloadedImages = await preloadClipImages(project);
+    final preloadedImages = await preloadClipImages(
+      project,
+      cancelToken: cancelToken,
+    );
     try {
-      final (int width, int height) = config.resolveDimensions(
-        project.numericAspectRatio,
-      );
-      final double totalDur = project.totalDuration.clamp(1.0, 45.0);
-      final int totalFrames = (totalDur * renderFps).round().clamp(15, 900);
-      final int batchSize = config.parallelBatchSize.clamp(2, 8);
-
       final colorMatrix = RustVideoBridge.instance.computeLumetriColorMatrix(
         project.colorGrade,
       );
 
-      final List<Uint8List> renderedFrames = List<Uint8List>.filled(
-        totalFrames,
-        Uint8List(0),
-      );
+      int framesEmitted = 0;
+      for (
+        int batchStart = 0;
+        batchStart < totalFrames;
+        batchStart += batchSize
+      ) {
+        cancelToken?.throwIfCancelled(VideoExportStage.rendering);
 
-      for (int batchStart = 0; batchStart < totalFrames; batchStart += batchSize) {
         final int batchEnd = math.min(totalFrames, batchStart + batchSize);
-        final List<Future<Uint8List>> batchFutures = [];
+        final List<Future<Uint8List>> batchFutures = <Future<Uint8List>>[];
 
         for (int idx = batchStart; idx < batchEnd; idx++) {
-          final double timestampSec = (idx / renderFps).clamp(0.0, totalDur);
+          final double timestampSec = RustVideoBridge.instance
+              .frameIndexToSeconds(idx, effectiveFps)
+              .clamp(0.0, totalDur);
           batchFutures.add(
             renderSingleFrameOffscreen(
               project: project,
@@ -70,20 +117,36 @@ class OffscreenVideoCompositor {
           );
         }
 
-        final batchResults = await Future.wait(batchFutures);
-        for (int k = 0; k < batchResults.length; k++) {
-          renderedFrames[batchStart + k] = batchResults[k];
+        final List<Uint8List> batchResults = await Future.wait(batchFutures);
+        cancelToken?.throwIfCancelled(VideoExportStage.rendering);
+
+        for (final frameBytes in batchResults) {
+          if (frameBytes.length < 8) {
+            throw const VideoExportException(
+              stage: VideoExportStage.rendering,
+              message: 'فشل رندر أحد الإطارات الخلفية (بيانات PNG فارغة).',
+            );
+          }
         }
+
+        await onBatchReady(
+          batchStart,
+          batchResults,
+          width,
+          height,
+          effectiveFps,
+        );
+        framesEmitted += batchResults.length;
 
         final ratio = batchEnd / totalFrames;
         onProgress?.call(
-          0.05 + ratio * 0.75,
-          'رندر خلفي فائق الدقة ($batchEnd / $totalFrames إطار • ${width}x$height • ×$batchSize متوازي)',
+          0.05 + ratio * 0.70,
+          'الرندر الخلفي: $batchEnd / $totalFrames إطار (${width}x$height @ $effectiveFps FPS • دفعة ×$batchSize)',
         );
         await Future<void>.delayed(Duration.zero);
       }
 
-      return renderedFrames.where((f) => f.isNotEmpty).toList();
+      return framesEmitted;
     } finally {
       for (final img in preloadedImages.values) {
         try {
@@ -93,43 +156,82 @@ class OffscreenVideoCompositor {
     }
   }
 
-  /// تحميل الصور الأصلية كاملة الدقة مباشرة من الملفات بدون أي تصغير
+  /// رندر جميع إطارات المشروع في الخلفية بدقة 1080p/720p الحقيقية على دفعات متوازية
+  static Future<List<Uint8List>> renderProjectFramesParallel({
+    required VideoProjectEntity project,
+    required VideoExportConfig config,
+    int? renderFps,
+    VideoExportCancelToken? cancelToken,
+    void Function(double progress, String status)? onProgress,
+  }) async {
+    final List<Uint8List> allFrames = <Uint8List>[];
+    await renderProjectFramesStreamed(
+      project: project,
+      config: config,
+      renderFps: renderFps,
+      cancelToken: cancelToken,
+      onProgress: onProgress,
+      onBatchReady: (_, batchFrames, _, _, _) {
+        allFrames.addAll(batchFrames);
+      },
+    );
+    return allFrames;
+  }
+
+  /// تحميل الصور الأصلية كاملة الدقة مباشرة من الملفات بدون أي تصغير إلى أبعاد المعاينة
   static Future<Map<String, ui.Image>> preloadClipImages(
-    VideoProjectEntity project,
-  ) async {
-    final Map<String, ui.Image> result = {};
-    for (final clip in project.clips) {
-      if (clip.sourceType == VideoClipSourceType.romanticCard) continue;
-      try {
-        Uint8List? rawBytes;
-        if (clip.localPath != null &&
-            clip.localPath!.isNotEmpty &&
-            File(clip.localPath!).existsSync()) {
-          rawBytes = await File(clip.localPath!).readAsBytes();
-        } else if (clip.networkUrl != null && clip.networkUrl!.isNotEmpty) {
-          final uri = Uri.tryParse(clip.networkUrl!);
-          if (uri != null) {
-            final client = HttpClient();
-            final req = await client.getUrl(uri);
-            final resp = await req.close();
-            if (resp.statusCode == 200) {
-              final builder = BytesBuilder(copy: false);
-              await for (final chunk in resp) {
-                builder.add(chunk);
+    VideoProjectEntity project, {
+    VideoExportCancelToken? cancelToken,
+  }) async {
+    final Map<String, ui.Image> result = <String, ui.Image>{};
+    try {
+      for (final clip in project.clips) {
+        cancelToken?.throwIfCancelled(VideoExportStage.preparing);
+        if (clip.sourceType == VideoClipSourceType.romanticCard) continue;
+        try {
+          Uint8List? rawBytes;
+          if (clip.localPath != null &&
+              clip.localPath!.isNotEmpty &&
+              File(clip.localPath!).existsSync()) {
+            rawBytes = await File(clip.localPath!).readAsBytes();
+          } else if (clip.networkUrl != null && clip.networkUrl!.isNotEmpty) {
+            final uri = Uri.tryParse(clip.networkUrl!);
+            if (uri != null) {
+              final client = HttpClient();
+              try {
+                final req = await client.getUrl(uri);
+                final resp = await req.close();
+                if (resp.statusCode == 200) {
+                  final builder = BytesBuilder(copy: false);
+                  await for (final chunk in resp) {
+                    cancelToken?.throwIfCancelled(VideoExportStage.preparing);
+                    builder.add(chunk);
+                  }
+                  rawBytes = builder.takeBytes();
+                }
+              } finally {
+                client.close();
               }
-              rawBytes = builder.takeBytes();
             }
-            client.close();
           }
+          if (rawBytes != null && rawBytes.isNotEmpty) {
+            final codec = await ui.instantiateImageCodec(rawBytes);
+            final frameInfo = await codec.getNextFrame();
+            result[clip.id] = frameInfo.image;
+          }
+        } catch (e) {
+          if (e is VideoExportException) rethrow;
         }
-        if (rawBytes != null && rawBytes.isNotEmpty) {
-          final codec = await ui.instantiateImageCodec(rawBytes);
-          final frameInfo = await codec.getNextFrame();
-          result[clip.id] = frameInfo.image;
-        }
-      } catch (_) {}
+      }
+      return result;
+    } catch (e) {
+      for (final img in result.values) {
+        try {
+          img.dispose();
+        } catch (_) {}
+      }
+      rethrow;
     }
-    return result;
   }
 
   /// رندر إطار واحد في الخلفية بدقة 1080p/720p الحقيقية عبر `ui.PictureRecorder`
@@ -145,7 +247,8 @@ class OffscreenVideoCompositor {
     final double w = width.toDouble();
     final double h = height.toDouble();
     final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h));
-    final double scaleFactor = w / 360.0;
+    // الاعتماد على الضلع الأقصر لضمان ثبات تناسب النصوص والبطاقات عبر نسب 9:16 و 1:1 و 16:9 (VID-015)
+    final double scaleFactor = math.min(w, h) / 360.0;
 
     canvas.drawRect(
       Rect.fromLTWH(0, 0, w, h),
@@ -187,10 +290,13 @@ class OffscreenVideoCompositor {
           ? (localTime / transDur).clamp(0.0, 1.0)
           : 1.0;
 
-      canvas.saveLayer(
-        Rect.fromLTWH(0, 0, w, h),
-        Paint()..colorFilter = ColorFilter.matrix(colorMatrix),
-      );
+      final bool applyColorFilter = !project.colorGrade.isIdentity;
+      if (applyColorFilter) {
+        canvas.saveLayer(
+          Rect.fromLTWH(0, 0, w, h),
+          Paint()..colorFilter = ColorFilter.matrix(colorMatrix),
+        );
+      }
 
       if (isInTransition && activeIdx > 0) {
         final prevClip = project.clips[activeIdx - 1];
@@ -227,7 +333,9 @@ class OffscreenVideoCompositor {
         transitionProgress: transProgress,
       );
 
-      canvas.restore();
+      if (applyColorFilter) {
+        canvas.restore();
+      }
     }
 
     final vignetteAmount = project.colorGrade.vignette.clamp(0.0, 0.85);
@@ -265,11 +373,14 @@ class OffscreenVideoCompositor {
     final img = await picture.toImage(width, height);
     try {
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-      picture.dispose();
       if (byteData != null) {
-        return byteData.buffer.asUint8List();
+        return byteData.buffer.asUint8List(
+          byteData.offsetInBytes,
+          byteData.lengthInBytes,
+        );
       }
     } finally {
+      picture.dispose();
       img.dispose();
     }
     return Uint8List(0);

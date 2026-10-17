@@ -59,6 +59,36 @@ class LumetriColorGrade {
     this.vignette = 0.0,
   });
 
+  /// هل جميع المعاملات اللونية في وضع عدم التعديل (Identity / No-Op)؟ (VID-007)
+  bool get isIdentity =>
+      exposure.abs() < 1e-6 &&
+      contrast.abs() < 1e-6 &&
+      saturation.abs() < 1e-6 &&
+      temperature.abs() < 1e-6 &&
+      fadedFilm.abs() < 1e-6 &&
+      vignette.abs() < 1e-6;
+
+  /// التحقق من أن جميع المعاملات اللونية أعداد محدودة وصالحة (VID-007)
+  bool get hasValidParameters =>
+      exposure.isFinite &&
+      contrast.isFinite &&
+      saturation.isFinite &&
+      temperature.isFinite &&
+      fadedFilm.isFinite &&
+      vignette.isFinite &&
+      exposure >= -2.5 &&
+      exposure <= 2.5 &&
+      contrast >= -1.0 &&
+      contrast <= 2.0 &&
+      saturation >= -1.0 &&
+      saturation <= 2.0 &&
+      temperature >= -1.5 &&
+      temperature <= 1.5 &&
+      fadedFilm >= 0.0 &&
+      fadedFilm <= 1.0 &&
+      vignette >= 0.0 &&
+      vignette <= 1.0;
+
   factory LumetriColorGrade.fromPreset(LumetriLookPreset preset) {
     return switch (preset) {
       LumetriLookPreset.original => const LumetriColorGrade(
