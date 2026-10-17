@@ -4,13 +4,15 @@
 // 1. filmcraft-time: نظام التوقيت الصحيح الخالي من الانجراف (Exact Integer Ticks: 254,016,000,000 ticks/sec)
 // 2. filmcraft-project::keyframe: حلال Newton-Raphson + Bisection لمنحنيات Cubic Bezier الزمنية و Catmull-Rom
 // 3. filmcraft-color: مصفوفات Lumetri Rec.709 وتحويل الفضاء اللوني ITU-R BT.709 Studio-Swing مع 2x2 Chroma Box-Filter
-// 4. filmcraft-audio-dsp: مازج صوت متعدد المسارات بدقة الـ Tick، وتلاشي Constant-Power Sine، ومحدد ذروة ناعم Soft-Knee Tanh
-// 5. filmcraft-avi: تجميع حاوية RIFF/AVI بتداخل إطار بإطار (Frame-Interleaved 00dc + 01wb WAVEFORMATEX PCM)
+// 4. filmcraft-render-parallel: معالجة دفعات الإطارات بالتوازي عبر كافة أنوية المعالج (std::thread::scope Multi-Core Batching)
+// 5. filmcraft-audio-dsp: مازج صوت متعدد المسارات بدقة الـ Tick، وتلاشي Constant-Power Sine، ومحدد ذروة ناعم Soft-Knee Tanh
+// 6. filmcraft-avi: تجميع حاوية RIFF/AVI بتداخل إطار بإطار (Frame-Interleaved 00dc + 01wb WAVEFORMATEX PCM)
 
 use std::f64::consts::PI;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::slice;
+use std::thread;
 
 /// عدد النبضات الزمنية في الثانية الواحدة كما في `filmcraft-time`
 /// يقبل القسمة بدون باقٍ على كافة معدلات الإطارات (23.976, 24, 25, 29.97, 30, 50, 59.94, 60, 120)
@@ -25,6 +27,15 @@ pub struct NativeTransform {
     pub scale: f64,
     pub rotation: f64,
     pub opacity: f64,
+}
+
+/// إرجاع عدد أنوية المعالج المتاحة للمعالجة المتوازية (Multi-Core Parallelism)
+#[no_mangle]
+pub extern "C" fn rust_get_hardware_concurrency() -> u32 {
+    thread::available_parallelism()
+        .map(|n| n.get() as u32)
+        .unwrap_or(4)
+        .max(1)
 }
 
 /// تحويل الثواني إلى نبضات صحيحة (Exact Integer Ticks) لمنع أي انجراف في الفريمات أو العينات الصوتية
@@ -152,9 +163,7 @@ pub extern "C" fn rust_apply_easing(t: f64, easing_type: i32) -> f64 {
         5 => {
             if clamped < 1.0 { 0.0 } else { 1.0 }
         }
-        6 => {
-            rust_solve_cubic_bezier_2d(0.25, 0.1, 0.25, 1.0, clamped)
-        }
+        6 => rust_solve_cubic_bezier_2d(0.25, 0.1, 0.25, 1.0, clamped),
         _ => clamped,
     }
 }
@@ -197,22 +206,14 @@ pub extern "C" fn rust_interpolate_keyframes(
     }
 }
 
-/// حساب مصفوفة تصحيح الألوان 4x5 (20 عنصراً) بأسلوب Lumetri Color في `filmcraft-color`
-/// تشمل: Exposure, Contrast, Saturation, Temperature (Warm/Cool), Faded Film
-#[no_mangle]
-pub unsafe extern "C" fn rust_compute_lumetri_matrix(
+#[inline]
+fn compute_lumetri_matrix_array(
     exposure: f64,
     contrast: f64,
     saturation: f64,
     temperature: f64,
     faded_film: f64,
-    out_matrix_20: *mut f64,
-) {
-    if out_matrix_20.is_null() {
-        return;
-    }
-    let out = slice::from_raw_parts_mut(out_matrix_20, 20);
-
+) -> [f64; 20] {
     let gain = 2.0_f64.powf(exposure.clamp(-2.0, 2.0));
     let c = (1.0 + contrast.clamp(-0.8, 1.5)).max(0.1);
     let s = (1.0 + saturation.clamp(-1.0, 1.5)).max(0.0);
@@ -231,33 +232,47 @@ pub unsafe extern "C" fn rust_compute_lumetri_matrix(
     let scale = gain * c;
     let offset = (1.0 - c) * 128.0 + fade;
 
-    // Row 0 (Red)
-    out[0] = scale * (sr + s);
-    out[1] = scale * sg;
-    out[2] = scale * sb;
-    out[3] = 0.0;
-    out[4] = offset + temp;
+    [
+        scale * (sr + s),
+        scale * sg,
+        scale * sb,
+        0.0,
+        offset + temp,
+        scale * sr,
+        scale * (sg + s),
+        scale * sb,
+        0.0,
+        offset,
+        scale * sr,
+        scale * sg,
+        scale * (sb + s),
+        0.0,
+        offset - temp,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+    ]
+}
 
-    // Row 1 (Green)
-    out[5] = scale * sr;
-    out[6] = scale * (sg + s);
-    out[7] = scale * sb;
-    out[8] = 0.0;
-    out[9] = offset;
-
-    // Row 2 (Blue)
-    out[10] = scale * sr;
-    out[11] = scale * sg;
-    out[12] = scale * (sb + s);
-    out[13] = 0.0;
-    out[14] = offset - temp;
-
-    // Row 3 (Alpha)
-    out[15] = 0.0;
-    out[16] = 0.0;
-    out[17] = 0.0;
-    out[18] = 1.0;
-    out[19] = 0.0;
+/// حساب مصفوفة تصحيح الألوان 4x5 (20 عنصراً) بأسلوب Lumetri Color في `filmcraft-color`
+/// تشمل: Exposure, Contrast, Saturation, Temperature (Warm/Cool), Faded Film
+#[no_mangle]
+pub unsafe extern "C" fn rust_compute_lumetri_matrix(
+    exposure: f64,
+    contrast: f64,
+    saturation: f64,
+    temperature: f64,
+    faded_film: f64,
+    out_matrix_20: *mut f64,
+) {
+    if out_matrix_20.is_null() {
+        return;
+    }
+    let out = slice::from_raw_parts_mut(out_matrix_20, 20);
+    let m = compute_lumetri_matrix_array(exposure, contrast, saturation, temperature, faded_film);
+    out.copy_from_slice(&m);
 }
 
 /// دمج بكسلات إطارين (RGBA8888) في الذاكرة لتطبيق انتقالات الفيديو بسرعة فائقة
@@ -283,6 +298,75 @@ pub unsafe extern "C" fn rust_blend_rgba_frames(
         let va = slice_a[i] as f64;
         let vb = slice_b[i] as f64;
         slice_out[i] = (va * inv_alpha + vb * alpha).round().clamp(0.0, 255.0) as u8;
+    }
+}
+
+/// تحويل إطار RGBA8888 مفرد إلى NV12 بمعيار ITU-R BT.709 Studio-Swing مع فلتر 2x2 للكروما (آمن للاستدعاء المتوازي)
+#[inline]
+fn convert_single_rgba_to_bt709_nv12(rgba: &[u8], nv12: &mut [u8], w: usize, h: usize) {
+    let y_size = w * h;
+    let (y_plane, uv_plane) = nv12.split_at_mut(y_size);
+
+    for y in 0..h {
+        let src_row = y * w * 4;
+        let dst_row = y * w;
+        for x in 0..w {
+            let px = src_row + x * 4;
+            let r = rgba[px] as i32;
+            let g = rgba[px + 1] as i32;
+            let b = rgba[px + 2] as i32;
+            y_plane[dst_row + x] = (((47 * r + 157 * g + 16 * b + 128) >> 8) + 16).clamp(16, 235) as u8;
+        }
+    }
+
+    let half_h = h / 2;
+    let half_w = w / 2;
+    for uy in 0..half_h {
+        let y0 = uy * 2;
+        let y1 = (y0 + 1).min(h - 1);
+        let row0 = y0 * w * 4;
+        let row1 = y1 * w * 4;
+        let uv_dst_row = uy * w;
+
+        for ux in 0..half_w {
+            let x0 = ux * 2;
+            let x1 = (x0 + 1).min(w - 1);
+
+            let p00 = row0 + x0 * 4;
+            let p01 = row0 + x1 * 4;
+            let p10 = row1 + x0 * 4;
+            let p11 = row1 + x1 * 4;
+
+            let r_avg = (rgba[p00] as i32
+                + rgba[p01] as i32
+                + rgba[p10] as i32
+                + rgba[p11] as i32
+                + 2)
+                >> 2;
+            let g_avg = (rgba[p00 + 1] as i32
+                + rgba[p01 + 1] as i32
+                + rgba[p10 + 1] as i32
+                + rgba[p11 + 1] as i32
+                + 2)
+                >> 2;
+            let b_avg = (rgba[p00 + 2] as i32
+                + rgba[p01 + 2] as i32
+                + rgba[p10 + 2] as i32
+                + rgba[p11 + 2] as i32
+                + 2)
+                >> 2;
+
+            let u_val =
+                (((-25 * r_avg - 87 * g_avg + 112 * b_avg + 128) >> 8) + 128).clamp(16, 240) as u8;
+            let v_val =
+                (((112 * r_avg - 102 * g_avg - 10 * b_avg + 128) >> 8) + 128).clamp(16, 240) as u8;
+
+            let dst_idx = uv_dst_row + ux * 2;
+            if dst_idx + 1 < uv_plane.len() {
+                uv_plane[dst_idx] = u_val;
+                uv_plane[dst_idx + 1] = v_val;
+            }
+        }
     }
 }
 
@@ -339,7 +423,7 @@ pub unsafe extern "C" fn rust_rgba_to_bt709_yuv420_strided(
     }
 
     // 2. حساب الكروما (Cb/Cr) عبر متوسط مربع 2x2 بكسل (2x2 Box-Filter) لمنع التعرج اللوني على حواف النصوص
-    // Cb = ((-26 * R - 87 * G + 112 * B + 128) >> 8) + 128
+    // Cb = ((-25 * R - 87 * G + 112 * B + 128) >> 8) + 128
     // Cr = ((112 * R - 102 * G - 10 * B + 128) >> 8) + 128
     let half_h = h / 2;
     let half_w = w / 2;
@@ -419,6 +503,144 @@ pub unsafe extern "C" fn rust_rgba_to_nv12(
         width,
         2,
     )
+}
+
+/// معالجة دفعة كاملة من إطارات RGBA8888 بالتوازي عبر جميع أنوية المعالج (Multi-Core Scoped Threads)
+/// لتطبيق مصفوفة ألوان Lumetri والتظليل السينمائي (Vignette) في وقت واحد على عدة إطارات
+#[no_mangle]
+pub unsafe extern "C" fn rust_process_rgba_batch_lumetri(
+    rgba_batch_ptr: *mut u8,
+    num_frames: usize,
+    width: u32,
+    height: u32,
+    exposure: f64,
+    contrast: f64,
+    saturation: f64,
+    temperature: f64,
+    faded_film: f64,
+    vignette: f64,
+) -> i32 {
+    if rgba_batch_ptr.is_null() || num_frames == 0 || width == 0 || height == 0 {
+        return -1;
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let frame_bytes = w.saturating_mul(h).saturating_mul(4);
+    let total_bytes = frame_bytes.saturating_mul(num_frames);
+    if frame_bytes == 0 || total_bytes == 0 {
+        return -2;
+    }
+
+    let m = compute_lumetri_matrix_array(exposure, contrast, saturation, temperature, faded_film);
+    let vig = vignette.clamp(0.0, 0.85);
+    let batch_slice = slice::from_raw_parts_mut(rgba_batch_ptr, total_bytes);
+
+    let max_threads = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8);
+    let frames_per_chunk = (num_frames + max_threads - 1) / max_threads;
+    let bytes_per_chunk = frames_per_chunk * frame_bytes;
+
+    thread::scope(|s| {
+        for chunk in batch_slice.chunks_mut(bytes_per_chunk) {
+            s.spawn(move || {
+                let cx = (w as f64) * 0.5;
+                let cy = (h as f64) * 0.5;
+                let inv_max_dist = 1.0 / (cx * cx + cy * cy).sqrt().max(1.0);
+
+                for frame in chunk.chunks_exact_mut(frame_bytes) {
+                    for y in 0..h {
+                        let dy = (y as f64) - cy;
+                        let row_off = y * w * 4;
+                        for x in 0..w {
+                            let idx = row_off + x * 4;
+                            let r = frame[idx] as f64;
+                            let g = frame[idx + 1] as f64;
+                            let b = frame[idx + 2] as f64;
+
+                            let mut nr = m[0] * r + m[1] * g + m[2] * b + m[4];
+                            let mut ng = m[5] * r + m[6] * g + m[7] * b + m[9];
+                            let mut nb = m[10] * r + m[11] * g + m[12] * b + m[14];
+
+                            if vig > 0.01 {
+                                let dx = (x as f64) - cx;
+                                let dist = (dx * dx + dy * dy).sqrt() * inv_max_dist;
+                                if dist > 0.45 {
+                                    let factor =
+                                        1.0 - vig * ((dist - 0.45) / 0.55).clamp(0.0, 1.0);
+                                    nr *= factor;
+                                    ng *= factor;
+                                    nb *= factor;
+                                }
+                            }
+
+                            frame[idx] = nr.round().clamp(0.0, 255.0) as u8;
+                            frame[idx + 1] = ng.round().clamp(0.0, 255.0) as u8;
+                            frame[idx + 2] = nb.round().clamp(0.0, 255.0) as u8;
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    0
+}
+
+/// تحويل دفعة إطارات RGBA8888 بالتوازي عبر جميع أنوية المعالج (Multi-Core Scoped Threads)
+/// إلى فضاء ITU-R BT.709 Studio-Swing NV12 مع فلتر 2x2 Box-Filter للكروما
+#[no_mangle]
+pub unsafe extern "C" fn rust_rgba_batch_to_bt709_nv12(
+    rgba_batch_ptr: *const u8,
+    nv12_batch_out_ptr: *mut u8,
+    num_frames: usize,
+    width: u32,
+    height: u32,
+) -> i32 {
+    if rgba_batch_ptr.is_null()
+        || nv12_batch_out_ptr.is_null()
+        || num_frames == 0
+        || width == 0
+        || height == 0
+    {
+        return -1;
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+    let rgba_frame_size = w.saturating_mul(h).saturating_mul(4);
+    let nv12_frame_size = (w.saturating_mul(h).saturating_mul(3)) / 2;
+    if rgba_frame_size == 0 || nv12_frame_size == 0 {
+        return -2;
+    }
+
+    let rgba_all = slice::from_raw_parts(rgba_batch_ptr, rgba_frame_size * num_frames);
+    let nv12_all = slice::from_raw_parts_mut(nv12_batch_out_ptr, nv12_frame_size * num_frames);
+
+    let max_threads = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8);
+    let frames_per_worker = (num_frames + max_threads - 1) / max_threads;
+
+    thread::scope(|s| {
+        for (rgba_chunk, nv12_chunk) in rgba_all
+            .chunks(frames_per_worker * rgba_frame_size)
+            .zip(nv12_all.chunks_mut(frames_per_worker * nv12_frame_size))
+        {
+            s.spawn(move || {
+                for (src_frame, dst_frame) in rgba_chunk
+                    .chunks_exact(rgba_frame_size)
+                    .zip(nv12_chunk.chunks_exact_mut(nv12_frame_size))
+                {
+                    convert_single_rgba_to_bt709_nv12(src_frame, dst_frame, w, h);
+                }
+            });
+        }
+    });
+
+    0
 }
 
 /// محدد ذروة صوتي ناعم (Soft-Knee Tanh True-Peak Limiter) كما في `filmcraft-audio-dsp`
