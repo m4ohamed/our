@@ -1,4 +1,3 @@
-
 package com.our.loveStory
 
 import android.app.Activity
@@ -8,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
@@ -25,9 +25,11 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -45,12 +47,36 @@ class MainActivity : FlutterFragmentActivity() {
         val flags: Int
     )
 
+    private class AviFrameLocation(
+        val offset: Long,
+        val size: Int
+    )
+
+    companion object {
+        private val PNG_MAGIC = byteArrayOf(
+            0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+        )
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "queryEncoderCapabilities" -> {
+                        Thread {
+                            try {
+                                val caps = queryDeviceEncoderCapabilities()
+                                runOnUiThread { result.success(caps) }
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    result.error("CAPABILITY_QUERY_FAILED", e.message, null)
+                                }
+                            }
+                        }.start()
+                    }
+
                     "decodeAudioToPcmFile" -> {
                         val audioPath = call.argument<String>("audioPath")
                         val outputPcmPath = call.argument<String>("outputPcmPath")
@@ -74,7 +100,7 @@ class MainActivity : FlutterFragmentActivity() {
                                 if (info == null) {
                                     runOnUiThread { result.success(null) }
                                 } else {
-                                    // توحيد القنوات الصوتية إلى Stereo (قناتين) لتسهيل مزج المؤثرات المتعددة في Rust
+                                    // توحيد القنوات الصوتية إلى Stereo (قناتين) مع الاحتفاظ بمعدل العينات الفعلي للمصدر (VID-005)
                                     val stereoBytes = if (info.third == 1) {
                                         monoPcm16ToStereo(info.first)
                                     } else {
@@ -92,8 +118,10 @@ class MainActivity : FlutterFragmentActivity() {
                                         )
                                     }
                                 }
-                            } catch (_: Exception) {
-                                runOnUiThread { result.success(null) }
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    result.error("AUDIO_DECODE_FAILED", e.message, null)
+                                }
                             }
                         }.start()
                     }
@@ -109,12 +137,13 @@ class MainActivity : FlutterFragmentActivity() {
                         val audioVolume = (call.argument<Number>("audioVolume")?.toDouble() ?: 0.85)
                         val audioFadeIn = call.argument<Boolean>("audioFadeIn") ?: true
                         val audioFadeOut = call.argument<Boolean>("audioFadeOut") ?: true
-                        val sourceFps = (call.argument<Number>("fps")?.toInt() ?: 30).coerceAtLeast(1)
-                        val requestedTargetFps = (call.argument<Number>("targetFps")?.toInt() ?: sourceFps).coerceAtLeast(sourceFps)
+                        val sourceFps = (call.argument<Number>("fps")?.toInt() ?: 30).coerceIn(1, 240)
+                        val requestedTargetFps = (call.argument<Number>("targetFps")?.toInt() ?: sourceFps).coerceIn(15, 60)
                         val rawWidth = (call.argument<Number>("width")?.toInt() ?: 1080)
                         val rawHeight = (call.argument<Number>("height")?.toInt() ?: 1920)
                         val codecMime = call.argument<String>("codecMime") ?: MediaFormat.MIMETYPE_VIDEO_AVC
-                        val bitrateBps = (call.argument<Number>("bitrateBps")?.toInt() ?: 12_000_000).coerceIn(2_000_000, 24_000_000)
+                        val bitrateBps = (call.argument<Number>("bitrateBps")?.toInt() ?: 14_000_000).coerceIn(2_000_000, 24_000_000)
+                        val allowCodecFallback = call.argument<Boolean>("allowCodecFallback") ?: false
 
                         if (aviPath.isNullOrBlank() || outputMp4Path.isNullOrBlank()) {
                             result.error("INVALID_ARGS", "Missing aviPath or outputMp4Path", null)
@@ -139,7 +168,8 @@ class MainActivity : FlutterFragmentActivity() {
                                     requestedWidth = rawWidth,
                                     requestedHeight = rawHeight,
                                     requestedCodecMime = codecMime,
-                                    requestedBitrateBps = bitrateBps
+                                    requestedBitrateBps = bitrateBps,
+                                    allowCodecFallback = allowCodecFallback
                                 )
                                 runOnUiThread {
                                     result.success(mp4File.absolutePath)
@@ -155,14 +185,20 @@ class MainActivity : FlutterFragmentActivity() {
                     "saveToPublicDownloads" -> {
                         val filePath = call.argument<String>("filePath")
                         val fileName = call.argument<String>("fileName")
-                        val mimeType = call.argument<String>("mimeType") ?: "video/mp4"
+                        val mimeType = call.argument<String>("mimeType")
                         if (filePath.isNullOrBlank() || fileName.isNullOrBlank()) {
                             result.error("INVALID_ARGS", "Missing filePath or fileName", null)
                             return@setMethodCallHandler
                         }
                         Thread {
                             try {
-                                val savedPath = saveFileToDownloadsAndGallery(filePath, fileName, mimeType)
+                                val srcFile = File(filePath)
+                                val actualMime = if (!mimeType.isNullOrBlank()) {
+                                    mimeType
+                                } else {
+                                    detectContainerMimeType(srcFile)
+                                }
+                                val savedPath = saveFileToDownloadsAndGallery(filePath, fileName, actualMime)
                                 runOnUiThread {
                                     result.success(savedPath)
                                 }
@@ -190,12 +226,13 @@ class MainActivity : FlutterFragmentActivity() {
                     "shareVideoFile" -> {
                         val filePath = call.argument<String>("filePath")
                         val title = call.argument<String>("title") ?: "فيديو ذكرياتنا"
+                        val requestedMime = call.argument<String>("mimeType")
                         if (filePath.isNullOrBlank()) {
                             result.error("INVALID_ARGS", "Missing filePath", null)
                             return@setMethodCallHandler
                         }
                         try {
-                            shareOrOpenMedia(filePath, title)
+                            shareOrOpenMedia(filePath, title, requestedMime)
                             result.success(true)
                         } catch (e: Exception) {
                             result.error("SHARE_FAILED", e.message, null)
@@ -207,7 +244,54 @@ class MainActivity : FlutterFragmentActivity() {
             }
     }
 
-    // ─── Hardware H.264 (.mp4) + AAC Audio Transcoder & Muxer ──────────────────
+    // ─── Hardware Encoder Capabilities Check (VID-017) ─────────────────────────
+
+    private fun queryDeviceEncoderCapabilities(): Map<String, Any> {
+        val supportsH264 = isEncoderSupported(MediaFormat.MIMETYPE_VIDEO_AVC, 1280, 720, 30, 8_000_000)
+        val supportsHevc = isEncoderSupported(MediaFormat.MIMETYPE_VIDEO_HEVC, 1280, 720, 30, 8_000_000)
+        val supports1080p60H264 = isEncoderSupported(MediaFormat.MIMETYPE_VIDEO_AVC, 1080, 1920, 60, 14_000_000)
+        val supports1080p60Hevc = isEncoderSupported(MediaFormat.MIMETYPE_VIDEO_HEVC, 1080, 1920, 60, 14_000_000)
+        return mapOf(
+            "supportsH264" to supportsH264,
+            "supportsHevc" to supportsHevc,
+            "supports1080p60H264" to supports1080p60H264,
+            "supports1080p60Hevc" to supports1080p60Hevc,
+            "maxSupportedBitrateBps" to 24_000_000
+        )
+    }
+
+    private fun isEncoderSupported(
+        mime: String,
+        width: Int,
+        height: Int,
+        fps: Int,
+        bitrateBps: Int
+    ): Boolean {
+        return try {
+            val codecList = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+            val testWidth = max(width, height)
+            val testHeight = min(width, height)
+            for (info in codecList.codecInfos) {
+                if (!info.isEncoder) continue
+                val types = info.supportedTypes
+                if (types.none { it.equals(mime, ignoreCase = true) }) continue
+                val caps = info.getCapabilitiesForType(mime)
+                val videoCaps = caps.videoCapabilities ?: continue
+                if (videoCaps.areSizeAndRateSupported(testWidth, testHeight, fps.toDouble()) ||
+                    videoCaps.areSizeAndRateSupported(width, height, fps.toDouble())
+                ) {
+                    if (videoCaps.bitrateRange.contains(bitrateBps) || videoCaps.bitrateRange.upper >= bitrateBps) {
+                        return true
+                    }
+                }
+            }
+            false
+        } catch (_: Exception) {
+            mime.equals(MediaFormat.MIMETYPE_VIDEO_AVC, ignoreCase = true)
+        }
+    }
+
+    // ─── Hardware H.264 / HEVC (.mp4) + AAC Audio Transcoder & Muxer ───────────
 
     private fun transcodeAviToMp4WithAudio(
         aviPath: String,
@@ -225,120 +309,145 @@ class MainActivity : FlutterFragmentActivity() {
         requestedWidth: Int,
         requestedHeight: Int,
         requestedCodecMime: String = MediaFormat.MIMETYPE_VIDEO_AVC,
-        requestedBitrateBps: Int = 12_000_000
+        requestedBitrateBps: Int = 14_000_000,
+        allowCodecFallback: Boolean = false
     ): File {
-        val frames = extractPngFramesFromAvi(File(aviPath))
-        if (frames.isEmpty()) {
-            throw IllegalStateException("No frames found in AVI container")
+        val aviFile = File(aviPath)
+        if (!aviFile.exists() || aviFile.length() < 32L) {
+            throw IllegalArgumentException("AVI file is missing or corrupt: $aviPath")
         }
 
-        // دعم دقة 1080p Full HD و 720p HD مع محاذاة زوجية متوافقة مع كافة معالجات MediaCodec العتادية
+        // فهرسة مواقع إطارات PNG داخل حاوية AVI بدون تحميل الملف كاملًا في الذاكرة (VID-003 / VID-009)
+        val frameLocations = indexPngFramesInAvi(aviFile)
+        if (frameLocations.isEmpty()) {
+            throw IllegalStateException("No valid PNG frames (00dc) found in AVI container")
+        }
+
+        // التحقق من الأبعاد الزوجية المتوافقة مع YUV420 و MediaCodec (VID-011 / VID-017)
         val isFullHd = max(requestedWidth, requestedHeight) >= 1400 || min(requestedWidth, requestedHeight) >= 1000
         val aspect = requestedWidth.toDouble() / max(1, requestedHeight).toDouble()
         val (encWidth, encHeight) = when {
-            aspect < 0.8 -> if (isFullHd) Pair(1080, 1920) else Pair(720, 1280)   // 9:16 Portrait (1080p / 720p)
-            aspect > 1.2 -> if (isFullHd) Pair(1920, 1080) else Pair(1280, 720)   // 16:9 Landscape (1080p / 720p)
-            else -> if (isFullHd) Pair(1080, 1080) else Pair(720, 720)            // 1:1 Square (1080p / 720p)
+            aspect < 0.8 -> if (isFullHd) Pair(1080, 1920) else Pair(720, 1280)   // 9:16 Portrait
+            aspect > 1.2 -> if (isFullHd) Pair(1920, 1080) else Pair(1280, 720)   // 16:9 Landscape
+            else -> if (isFullHd) Pair(1080, 1080) else Pair(720, 720)            // 1:1 Square
+        }
+        if (encWidth % 2 != 0 || encHeight % 2 != 0) {
+            throw IllegalArgumentException("Encoder dimensions must be even: ${encWidth}x$encHeight")
         }
 
-        val repeatFactor = max(1, (requestedTargetFps + sourceFps / 2) / max(1, sourceFps))
-        val targetFps = (sourceFps * repeatFactor).coerceIn(15, 60)
-        val totalOutputFrames = frames.size * repeatFactor
+        // حساب معدل الإطارات المستهدف بدقة بدون مضاعفة خاطئة تحول 20->30 إلى 40 FPS (VID-002)
+        val safeSourceFps = max(1, sourceFps)
+        val targetFps = requestedTargetFps.coerceIn(15, 60)
+        val totalOutputFrames = max(
+            1,
+            ((frameLocations.size.toLong() * targetFps.toLong() + (safeSourceFps / 2)) / safeSourceFps.toLong()).toInt()
+        )
         val totalDurationUs = (totalOutputFrames.toLong() * 1_000_000L) / targetFps.toLong()
 
-        // 1. ترميز الفيديو عتادياً إلى H.264 (AVC) أو H.265 (HEVC) بمعيار ITU-R BT.709 Studio-Swing
-        val (videoFormat, videoPackets) = try {
-            encodeFramesToH264(
-                pngFrames = frames,
-                width = encWidth,
-                height = encHeight,
-                targetFps = targetFps,
-                repeatFactor = repeatFactor,
-                codecMime = requestedCodecMime,
-                bitrateBps = requestedBitrateBps
-            )
-        } catch (_: Exception) {
-            // في حال عدم دعم المعالج لـ HEVC أو 1080p، الانتقال التلقائي الآمن إلى H.264 القياسي
-            encodeFramesToH264(
-                pngFrames = frames,
-                width = if (aspect < 0.8) 720 else if (aspect > 1.2) 1280 else 720,
-                height = if (aspect < 0.8) 1280 else if (aspect > 1.2) 720 else 720,
-                targetFps = 30,
-                repeatFactor = max(1, 30 / max(1, sourceFps)),
-                codecMime = MediaFormat.MIMETYPE_VIDEO_AVC,
-                bitrateBps = 8_000_000
+        val normalizedMime = if (requestedCodecMime.equals("video/hevc", ignoreCase = true)) {
+            MediaFormat.MIMETYPE_VIDEO_HEVC
+        } else {
+            MediaFormat.MIMETYPE_VIDEO_AVC
+        }
+
+        // التحقق الصريح من دعم الجهاز لـ HEVC أو الإعداد المختار دون تحويل صامت إلى H.264 (VID-017)
+        if (!allowCodecFallback && !isEncoderSupported(normalizedMime, encWidth, encHeight, targetFps, requestedBitrateBps)) {
+            throw IllegalStateException(
+                "الجهاز لا يدعم ترميز $normalizedMime بدقة ${encWidth}x$encHeight ومعدل $targetFps FPS."
             )
         }
 
-        // 2. ترميز الصوت إلى AAC-LC (من مخرجات مازج Rust متعدد المسارات أو من ملف الصوت مباشرة)
+        // 1. ترميز الصوت أولاً (حجم بياناته صغير ومحدود) لتجهيز مسار الصوت في MediaMuxer
         var audioFormat: MediaFormat? = null
         var audioPackets: List<EncodedPacket> = emptyList()
-        try {
-            if (!processedPcmPath.isNullOrBlank() && File(processedPcmPath).exists()) {
-                val pcmBytes = File(processedPcmPath).readBytes()
-                if (pcmBytes.isNotEmpty()) {
-                    val encoded = encodeRawPcm16ToAac(
-                        rawPcmBytes = pcmBytes,
-                        sampleRate = pcmSampleRate,
-                        channelCount = pcmChannels
-                    )
-                    audioFormat = encoded.first
-                    audioPackets = encoded.second
-                }
-            } else if (!audioPath.isNullOrBlank() && File(audioPath).exists() && audioVolume > 0.01) {
-                val transcodedAudio = transcodeAudioToAac(
-                    audioPath = audioPath,
-                    startOffsetUs = audioStartOffsetUs,
-                    totalDurationUs = totalDurationUs,
-                    volume = audioVolume,
-                    fadeIn = audioFadeIn,
-                    fadeOut = audioFadeOut
+        if (!processedPcmPath.isNullOrBlank() && File(processedPcmPath).exists()) {
+            val pcmBytes = File(processedPcmPath).readBytes()
+            if (pcmBytes.isNotEmpty()) {
+                val encoded = encodeRawPcm16ToAac(
+                    rawPcmBytes = pcmBytes,
+                    sampleRate = pcmSampleRate,
+                    channelCount = pcmChannels
                 )
-                if (transcodedAudio != null) {
-                    audioFormat = transcodedAudio.first
-                    audioPackets = transcodedAudio.second
-                }
+                audioFormat = encoded.first
+                audioPackets = encoded.second
             }
-        } catch (_: Exception) {}
+        } else if (!audioPath.isNullOrBlank() && File(audioPath).exists() && audioVolume > 0.01) {
+            val transcodedAudio = transcodeAudioToAac(
+                audioPath = audioPath,
+                startOffsetUs = audioStartOffsetUs,
+                totalDurationUs = totalDurationUs,
+                volume = audioVolume,
+                fadeIn = audioFadeIn,
+                fadeOut = audioFadeOut
+            )
+            if (transcodedAudio != null) {
+                audioFormat = transcodedAudio.first
+                audioPackets = transcodedAudio.second
+            }
+        }
 
-        // 3. تجميع مساري الفيديو (H.264) والصوت (AAC) داخل حاوية MP4 قياسية
+        // 2. ترميز الفيديو وتدفقه مباشرة إلى MediaMuxer إطاراً بإطار دون تخزين حزم الفيديو في الذاكرة (VID-003 / VID-006)
         val outFile = File(outputMp4Path)
         if (outFile.exists()) outFile.delete()
 
-        val muxer = MediaMuxer(outFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-        val videoTrackIdx = muxer.addTrack(videoFormat)
-        val audioTrackIdx = if (audioFormat != null && audioPackets.isNotEmpty()) {
-            muxer.addTrack(audioFormat)
-        } else {
-            -1
-        }
-
-        muxer.start()
-
-        val bufferInfo = MediaCodec.BufferInfo()
-        for (pkt in videoPackets) {
-            bufferInfo.set(0, pkt.data.size, pkt.presentationTimeUs, pkt.flags)
-            muxer.writeSampleData(videoTrackIdx, ByteBuffer.wrap(pkt.data), bufferInfo)
-        }
-
-        if (audioTrackIdx >= 0) {
-            for (pkt in audioPackets) {
-                bufferInfo.set(0, pkt.data.size, pkt.presentationTimeUs, pkt.flags)
-                muxer.writeSampleData(audioTrackIdx, ByteBuffer.wrap(pkt.data), bufferInfo)
+        try {
+            streamEncodeFramesAndMuxToMp4(
+                aviFile = aviFile,
+                frameLocations = frameLocations,
+                outputMp4File = outFile,
+                width = encWidth,
+                height = encHeight,
+                sourceFps = safeSourceFps,
+                targetFps = targetFps,
+                totalOutputFrames = totalOutputFrames,
+                codecMime = normalizedMime,
+                bitrateBps = requestedBitrateBps,
+                audioFormat = audioFormat,
+                audioPackets = audioPackets
+            )
+        } catch (e: Exception) {
+            if (outFile.exists()) outFile.delete()
+            if (!allowCodecFallback) {
+                throw IllegalStateException(
+                    "فشل الترميز العتادي ($normalizedMime ${encWidth}x$encHeight @ $targetFps FPS): ${e.message}",
+                    e
+                )
             }
+            // وضع التوافق الاختياري فقط إذا طُلب صراحة (`allowCodecFallback == true`)
+            val fallbackW = if (aspect < 0.8) 720 else if (aspect > 1.2) 1280 else 720
+            val fallbackH = if (aspect < 0.8) 1280 else if (aspect > 1.2) 720 else 720
+            streamEncodeFramesAndMuxToMp4(
+                aviFile = aviFile,
+                frameLocations = frameLocations,
+                outputMp4File = outFile,
+                width = fallbackW,
+                height = fallbackH,
+                sourceFps = safeSourceFps,
+                targetFps = 30,
+                totalOutputFrames = max(1, ((frameLocations.size.toLong() * 30L) / safeSourceFps.toLong()).toInt()),
+                codecMime = MediaFormat.MIMETYPE_VIDEO_AVC,
+                bitrateBps = 8_000_000,
+                audioFormat = audioFormat,
+                audioPackets = audioPackets
+            )
         }
 
-        muxer.stop()
-        muxer.release()
-
-        // 4. الفحص الذاتي الصارم (Oracle Verification) عبر MediaMetadataRetriever للتأكد من سلامة ملف الـ MP4
-        verifyExportedMp4WithRetriever(outFile)
+        // 3. الفحص الذاتي الصارم (Oracle Verification) عبر MediaMetadataRetriever للتأكد من سلامة ملف الـ MP4 (VID-018)
+        verifyExportedMp4WithRetriever(
+            mp4File = outFile,
+            expectedWidth = encWidth,
+            expectedHeight = encHeight
+        )
 
         return outFile
     }
 
-    private fun verifyExportedMp4WithRetriever(mp4File: File) {
-        if (!mp4File.exists() || mp4File.length() < 256) {
+    private fun verifyExportedMp4WithRetriever(
+        mp4File: File,
+        expectedWidth: Int,
+        expectedHeight: Int
+    ) {
+        if (!mp4File.exists() || mp4File.length() < 256L) {
             throw IllegalStateException("Exported MP4 file is empty or corrupt")
         }
         val retriever = MediaMetadataRetriever()
@@ -348,6 +457,18 @@ class MainActivity : FlutterFragmentActivity() {
             if (hasVideo == null || !hasVideo.equals("yes", ignoreCase = true)) {
                 throw IllegalStateException("MediaMetadataRetriever verification failed: no valid video track")
             }
+            val actualW = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+            val actualH = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+            if (actualW <= 0 || actualH <= 0) {
+                throw IllegalStateException("MediaMetadataRetriever verification failed: invalid video dimensions ${actualW}x$actualH")
+            }
+            if ((actualW != expectedWidth || actualH != expectedHeight) &&
+                (actualW != expectedHeight || actualH != expectedWidth)
+            ) {
+                throw IllegalStateException(
+                    "Exported video dimensions (${actualW}x$actualH) do not match requested (${expectedWidth}x$expectedHeight)"
+                )
+            }
         } finally {
             try {
                 retriever.release()
@@ -355,53 +476,137 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    private fun extractPngFramesFromAvi(aviFile: File): List<ByteArray> {
-        val bytes = aviFile.readBytes()
-        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-        val frames = ArrayList<ByteArray>()
+    /// فهرسة مواقع إطارات PNG (`00dc`) داخل حاوية RIFF/AVI عبر `RandomAccessFile` بدون قراءة الملف كاملًا في الذاكرة (VID-003 / VID-009)
+    private fun indexPngFramesInAvi(aviFile: File): List<AviFrameLocation> {
+        val fileLen = aviFile.length()
+        if (fileLen < 32L) return emptyList()
 
-        var i = 12
-        while (i + 8 <= bytes.size) {
-            val c0 = bytes[i].toInt() and 0xFF
-            val c1 = bytes[i + 1].toInt() and 0xFF
-            val c2 = bytes[i + 2].toInt() and 0xFF
-            val c3 = bytes[i + 3].toInt() and 0xFF
-            val chunkSize = buf.getInt(i + 4)
+        val locations = ArrayList<AviFrameLocation>()
+        RandomAccessFile(aviFile, "r").use { raf ->
+            val header = ByteArray(12)
+            if (raf.read(header) != 12) return emptyList()
 
-            if (c0 == 0x4C && c1 == 0x49 && c2 == 0x53 && c3 == 0x54) {
-                i += 12
-                continue
+            // التحقق الصارم من توقيع "RIFF" و "AVI " (VID-009)
+            if (header[0] != 0x52.toByte() ||
+                header[1] != 0x49.toByte() ||
+                header[2] != 0x46.toByte() ||
+                header[3] != 0x46.toByte() ||
+                header[8] != 0x41.toByte() ||
+                header[9] != 0x56.toByte() ||
+                header[10] != 0x49.toByte() ||
+                header[11] != 0x20.toByte()
+            ) {
+                return emptyList()
             }
 
-            if (c0 == 0x30 && c1 == 0x30 && c2 == 0x64 && c3 == 0x63) {
-                val start = i + 8
-                val end = start + chunkSize
-                if (chunkSize > 0 && end <= bytes.size) {
-                    frames.add(bytes.copyOfRange(start, end))
+            val riffSizeUnsigned = ByteBuffer.wrap(header, 4, 4)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .int.toLong() and 0xFFFFFFFFL
+            val containerEnd = min(fileLen, riffSizeUnsigned + 8L)
+            if (containerEnd < 24L) return emptyList()
+
+            val chunkHdr = ByteArray(8)
+            val listTypeBuf = ByteArray(4)
+            val pngSigBuf = ByteArray(8)
+            var pos = 12L
+
+            while (pos + 8L <= containerEnd) {
+                raf.seek(pos)
+                if (raf.read(chunkHdr) != 8) break
+
+                val c0 = chunkHdr[0].toInt() and 0xFF
+                val c1 = chunkHdr[1].toInt() and 0xFF
+                val c2 = chunkHdr[2].toInt() and 0xFF
+                val c3 = chunkHdr[3].toInt() and 0xFF
+                val chunkSize = ByteBuffer.wrap(chunkHdr, 4, 4)
+                    .order(ByteOrder.LITTLE_ENDIAN)
+                    .int.toLong() and 0xFFFFFFFFL
+                val dataStart = pos + 8L
+                val dataEnd = dataStart + chunkSize
+
+                if (dataEnd > containerEnd) break
+
+                // فحص قوائم LIST ("LIST" = 0x4C, 0x49, 0x53, 0x54)
+                if (c0 == 0x4C && c1 == 0x49 && c2 == 0x53 && c3 == 0x54 && chunkSize >= 4L) {
+                    if (raf.read(listTypeBuf) != 4) break
+                    // الدخول فقط داخل قائمة "movi" (0x6D, 0x6F, 0x76, 0x69)
+                    if (listTypeBuf[0] == 0x6D.toByte() &&
+                        listTypeBuf[1] == 0x6F.toByte() &&
+                        listTypeBuf[2] == 0x76.toByte() &&
+                        listTypeBuf[3] == 0x69.toByte()
+                    ) {
+                        var mpos = dataStart + 4L
+                        while (mpos + 8L <= dataEnd) {
+                            raf.seek(mpos)
+                            if (raf.read(chunkHdr) != 8) break
+                            val mc0 = chunkHdr[0].toInt() and 0xFF
+                            val mc1 = chunkHdr[1].toInt() and 0xFF
+                            val mc2 = chunkHdr[2].toInt() and 0xFF
+                            val mc3 = chunkHdr[3].toInt() and 0xFF
+                            val mSize = ByteBuffer.wrap(chunkHdr, 4, 4)
+                                .order(ByteOrder.LITTLE_ENDIAN)
+                                .int.toLong() and 0xFFFFFFFFL
+                            val mStart = mpos + 8L
+                            val mEnd = mStart + mSize
+
+                            if (mEnd > dataEnd) break
+
+                            if (mc0 == 0x4C && mc1 == 0x49 && mc2 == 0x53 && mc3 == 0x54 && mSize >= 4L) {
+                                if (raf.read(listTypeBuf) == 4 &&
+                                    listTypeBuf[0] == 0x72.toByte() &&
+                                    listTypeBuf[1] == 0x65.toByte() &&
+                                    listTypeBuf[2] == 0x63.toByte() &&
+                                    listTypeBuf[3] == 0x20.toByte()
+                                ) {
+                                    mpos = mStart + 4L
+                                    continue
+                                }
+                            } else if (mc0 == 0x30 && mc1 == 0x30 && mc2 == 0x64 && mc3 == 0x63 &&
+                                mSize >= 8L && mSize <= 32L * 1024L * 1024L
+                            ) {
+                                // التحقق من توقيع PNG القياسي في بداية مقطع 00dc (VID-009)
+                                if (raf.read(pngSigBuf) == 8 && pngSigBuf.contentEquals(PNG_MAGIC)) {
+                                    locations.add(AviFrameLocation(offset = mStart, size = mSize.toInt()))
+                                }
+                            }
+
+                            val mPadded = mSize + (mSize and 1L)
+                            val nextMpos = mStart + mPadded
+                            if (nextMpos <= mpos) break
+                            mpos = nextMpos
+                        }
+                    }
                 }
-            }
 
-            val padded = chunkSize + (if (chunkSize % 2 != 0) 1 else 0)
-            i += 8 + padded
+                val padded = chunkSize + (chunkSize and 1L)
+                val nextPos = dataStart + padded
+                if (nextPos <= pos) break
+                pos = nextPos
+            }
         }
-        return frames
+        return locations
     }
 
-    private fun encodeFramesToH264(
-        pngFrames: List<ByteArray>,
+    /// ترميز الإطارات وتدفقها مباشرة إلى `MediaMuxer` دون تخزين جميع الإطارات أو حزم الفيديو في الذاكرة (VID-003 / VID-006)
+    private fun streamEncodeFramesAndMuxToMp4(
+        aviFile: File,
+        frameLocations: List<AviFrameLocation>,
+        outputMp4File: File,
         width: Int,
         height: Int,
+        sourceFps: Int,
         targetFps: Int,
-        repeatFactor: Int,
-        codecMime: String = MediaFormat.MIMETYPE_VIDEO_AVC,
-        bitrateBps: Int = 12_000_000
-    ): Pair<MediaFormat, List<EncodedPacket>> {
-        val mime = if (codecMime.equals("video/hevc", ignoreCase = true)) {
-            MediaFormat.MIMETYPE_VIDEO_HEVC
-        } else {
-            MediaFormat.MIMETYPE_VIDEO_AVC
+        totalOutputFrames: Int,
+        codecMime: String,
+        bitrateBps: Int,
+        audioFormat: MediaFormat?,
+        audioPackets: List<EncodedPacket>
+    ) {
+        if (width <= 0 || height <= 0 || width % 2 != 0 || height % 2 != 0) {
+            throw IllegalArgumentException("Video dimensions must be positive even integers: ${width}x$height")
         }
-        val format = MediaFormat.createVideoFormat(mime, width, height).apply {
+
+        val format = MediaFormat.createVideoFormat(codecMime, width, height).apply {
             setInteger(
                 MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
@@ -409,127 +614,198 @@ class MainActivity : FlutterFragmentActivity() {
             setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
             setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-            // ضبط معايير الألوان ITU-R BT.709 Studio-Swing لتطابق ألوان شاشة الاستوديو مع المعرض
             setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
             setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
             setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
         }
 
-        val encoder = MediaCodec.createEncoderByType(mime)
-        encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        encoder.start()
+        val encoder = MediaCodec.createEncoderByType(codecMime)
+        val muxer = MediaMuxer(outputMp4File.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        var encoderStarted = false
+        var muxerStarted = false
+        var videoTrackIdx = -1
+        var audioTrackIdx = -1
 
-        val packets = ArrayList<EncodedPacket>()
-        var outputFormat: MediaFormat? = null
-        val bufferInfo = MediaCodec.BufferInfo()
-        val argbPixels = IntArray(width * height)
+        try {
+            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder.start()
+            encoderStarted = true
 
-        var outputFrameIndex = 0L
-        var inputDone = false
-        var outputDone = false
-        var pngIdx = 0
+            val bufferInfo = MediaCodec.BufferInfo()
+            val argbPixels = IntArray(width * height)
+            var cachedSrcFrameIdx = -1
 
-        while (!outputDone) {
-            if (!inputDone) {
-                val inBufIdx = encoder.dequeueInputBuffer(10_000)
-                if (inBufIdx >= 0) {
-                    if (pngIdx >= pngFrames.size) {
-                        val ptsUs = (outputFrameIndex * 1_000_000L) / targetFps.toLong()
-                        encoder.queueInputBuffer(
-                            inBufIdx,
-                            0,
-                            0,
-                            ptsUs,
-                            MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                        )
-                        inputDone = true
-                    } else {
-                        val rawBitmap = BitmapFactory.decodeByteArray(
-                            pngFrames[pngIdx],
-                            0,
-                            pngFrames[pngIdx].size
-                        )
-                        val scaledBitmap = if (rawBitmap.width == width && rawBitmap.height == height) {
-                            rawBitmap
-                        } else {
-                            Bitmap.createScaledBitmap(rawBitmap, width, height, true)
+            var outFrameIndex = 0
+            var inputDone = false
+            var outputDone = false
+
+            RandomAccessFile(aviFile, "r").use { raf ->
+                while (!outputDone) {
+                    if (!inputDone) {
+                        val inBufIdx = encoder.dequeueInputBuffer(10_000)
+                        if (inBufIdx >= 0) {
+                            if (outFrameIndex >= totalOutputFrames) {
+                                val ptsUs = (outFrameIndex.toLong() * 1_000_000L) / targetFps.toLong()
+                                encoder.queueInputBuffer(
+                                    inBufIdx,
+                                    0,
+                                    0,
+                                    ptsUs,
+                                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                                )
+                                inputDone = true
+                            } else {
+                                // حساب فهرس الإطار المصدر من الزمن الفعلي للإطار المستهدف دون مضاعفة تشوه التوقيت (VID-002)
+                                val srcIdx = ((outFrameIndex.toLong() * sourceFps.toLong()) / targetFps.toLong())
+                                    .toInt()
+                                    .coerceIn(0, frameLocations.size - 1)
+
+                                if (srcIdx != cachedSrcFrameIdx) {
+                                    val loc = frameLocations[srcIdx]
+                                    val pngBytes = ByteArray(loc.size)
+                                    raf.seek(loc.offset)
+                                    raf.readFully(pngBytes)
+
+                                    val rawBitmap = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.size)
+                                        ?: throw IllegalStateException("Failed to decode PNG frame at index $srcIdx")
+                                    try {
+                                        val scaledBitmap = if (rawBitmap.width == width && rawBitmap.height == height) {
+                                            rawBitmap
+                                        } else {
+                                            Bitmap.createScaledBitmap(rawBitmap, width, height, true)
+                                        }
+                                        try {
+                                            scaledBitmap.getPixels(argbPixels, 0, width, 0, 0, width, height)
+                                        } finally {
+                                            if (scaledBitmap !== rawBitmap) {
+                                                scaledBitmap.recycle()
+                                            }
+                                        }
+                                    } finally {
+                                        rawBitmap.recycle()
+                                    }
+                                    cachedSrcFrameIdx = srcIdx
+                                }
+
+                                val ptsUs = (outFrameIndex.toLong() * 1_000_000L) / targetFps.toLong()
+
+                                // احترام عقد MediaCodec الصحيح بين getInputImage و getInputBuffer (VID-006)
+                                val inputImage = try {
+                                    encoder.getInputImage(inBufIdx)
+                                } catch (_: Exception) {
+                                    null
+                                }
+
+                                if (inputImage != null) {
+                                    val bytesWritten: Int
+                                    try {
+                                        bytesWritten = fillBt709Yuv420ImageFromArgb(
+                                            argb = argbPixels,
+                                            image = inputImage,
+                                            width = width,
+                                            height = height
+                                        )
+                                    } finally {
+                                        inputImage.close()
+                                    }
+                                    encoder.queueInputBuffer(inBufIdx, 0, bytesWritten, ptsUs, 0)
+                                } else {
+                                    val inputBuffer = encoder.getInputBuffer(inBufIdx)
+                                        ?: throw IllegalStateException("MediaCodec returned null inputBuffer for index $inBufIdx")
+                                    inputBuffer.clear()
+                                    val bytesWritten = fillBt709Nv12BufferFromArgb(
+                                        argb = argbPixels,
+                                        buffer = inputBuffer,
+                                        width = width,
+                                        height = height
+                                    )
+                                    encoder.queueInputBuffer(inBufIdx, 0, bytesWritten, ptsUs, 0)
+                                }
+
+                                outFrameIndex++
+                            }
                         }
-                        scaledBitmap.getPixels(argbPixels, 0, width, 0, 0, width, height)
-                        if (scaledBitmap !== rawBitmap) {
-                            scaledBitmap.recycle()
+                    }
+
+                    val outStatus = encoder.dequeueOutputBuffer(bufferInfo, 10_000)
+                    when {
+                        outStatus == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                            if (inputDone) Thread.sleep(4)
                         }
-                        rawBitmap.recycle()
-
-                        val inputImage = encoder.getInputImage(inBufIdx)
-                        val inputBuffer = encoder.getInputBuffer(inBufIdx)
-                        val yuvSize = (width * height * 3) / 2
-
-                        if (inputImage != null) {
-                            fillBt709Yuv420ImageFromArgb(argbPixels, inputImage, width, height)
-                            val cap = inputBuffer?.capacity() ?: yuvSize
-                            val ptsUs = (outputFrameIndex * 1_000_000L) / targetFps.toLong()
-                            encoder.queueInputBuffer(inBufIdx, 0, max(yuvSize, cap), ptsUs, 0)
-                        } else if (inputBuffer != null) {
-                            inputBuffer.clear()
-                            fillBt709Nv12BufferFromArgb(argbPixels, inputBuffer, width, height)
-                            val ptsUs = (outputFrameIndex * 1_000_000L) / targetFps.toLong()
-                            encoder.queueInputBuffer(inBufIdx, 0, yuvSize, ptsUs, 0)
+                        outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            if (muxerStarted) {
+                                throw IllegalStateException("MediaCodec output format changed twice")
+                            }
+                            videoTrackIdx = muxer.addTrack(encoder.outputFormat)
+                            if (audioFormat != null && audioPackets.isNotEmpty()) {
+                                audioTrackIdx = muxer.addTrack(audioFormat)
+                            }
+                            muxer.start()
+                            muxerStarted = true
                         }
-
-                        outputFrameIndex++
-                        if (outputFrameIndex % repeatFactor.toLong() == 0L) {
-                            pngIdx++
+                        outStatus >= 0 -> {
+                            val outBuf = encoder.getOutputBuffer(outStatus)
+                            if (outBuf != null &&
+                                bufferInfo.size > 0 &&
+                                (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
+                            ) {
+                                if (!muxerStarted) {
+                                    videoTrackIdx = muxer.addTrack(encoder.outputFormat)
+                                    if (audioFormat != null && audioPackets.isNotEmpty()) {
+                                        audioTrackIdx = muxer.addTrack(audioFormat)
+                                    }
+                                    muxer.start()
+                                    muxerStarted = true
+                                }
+                                outBuf.position(bufferInfo.offset)
+                                outBuf.limit(bufferInfo.offset + bufferInfo.size)
+                                muxer.writeSampleData(videoTrackIdx, outBuf, bufferInfo)
+                            }
+                            encoder.releaseOutputBuffer(outStatus, false)
+                            if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                outputDone = true
+                            }
                         }
                     }
                 }
             }
 
-            val outStatus = encoder.dequeueOutputBuffer(bufferInfo, 10_000)
-            when {
-                outStatus == MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                    if (inputDone) Thread.sleep(5)
-                }
-                outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    outputFormat = encoder.outputFormat
-                }
-                outStatus >= 0 -> {
-                    val outBuf = encoder.getOutputBuffer(outStatus)
-                    if (outBuf != null && bufferInfo.size > 0 &&
-                        (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
-                    ) {
-                        outBuf.position(bufferInfo.offset)
-                        outBuf.limit(bufferInfo.offset + bufferInfo.size)
-                        val bytes = ByteArray(bufferInfo.size)
-                        outBuf.get(bytes)
-                        packets.add(
-                            EncodedPacket(
-                                data = bytes,
-                                presentationTimeUs = bufferInfo.presentationTimeUs,
-                                flags = bufferInfo.flags
-                            )
-                        )
-                    }
-                    encoder.releaseOutputBuffer(outStatus, false)
-                    if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                        outputDone = true
-                    }
+            if (muxerStarted && audioTrackIdx >= 0) {
+                val audInfo = MediaCodec.BufferInfo()
+                for (pkt in audioPackets) {
+                    audInfo.set(0, pkt.data.size, pkt.presentationTimeUs, pkt.flags)
+                    muxer.writeSampleData(audioTrackIdx, ByteBuffer.wrap(pkt.data), audInfo)
                 }
             }
+        } finally {
+            if (encoderStarted) {
+                try {
+                    encoder.stop()
+                } catch (_: Exception) {}
+            }
+            try {
+                encoder.release()
+            } catch (_: Exception) {}
+
+            if (muxerStarted) {
+                try {
+                    muxer.stop()
+                } catch (_: Exception) {}
+            }
+            try {
+                muxer.release()
+            } catch (_: Exception) {}
         }
-
-        val finalFormat = outputFormat ?: encoder.outputFormat
-        encoder.stop()
-        encoder.release()
-        return Pair(finalFormat, packets)
     }
 
     /// تحويل ARGB إلى ITU-R BT.709 Studio-Swing YUV420 مع فلتر 2x2 Box-Filter للكروما
+    /// وإرجاع عدد البايتات الصالحة المكتوبة فعلياً بما لا يتجاوز سعة المخزن (VID-006 / VID-011)
     private fun fillBt709Yuv420ImageFromArgb(
         argb: IntArray,
         image: android.media.Image,
         width: Int,
         height: Int
-    ) {
+    ): Int {
         val planes = image.planes
         val yBuf = planes[0].buffer
         val yRowStride = planes[0].rowStride
@@ -547,6 +823,7 @@ class MainActivity : FlutterFragmentActivity() {
         val uCap = uBuf.capacity()
         val vCap = vBuf.capacity()
 
+        var maxYWritten = 0
         // 1. Luma (Y) بمعاملات ITU-R BT.709 Studio-Swing
         for (y in 0 until height) {
             val rowOffset = y * width
@@ -559,13 +836,16 @@ class MainActivity : FlutterFragmentActivity() {
 
                 val yVal = (((47 * r + 157 * g + 16 * b + 128) shr 8) + 16).coerceIn(16, 235)
                 val yIdx = yRowOffset + x * yPixelStride
-                if (yIdx < yCap) {
+                if (yIdx in 0 until yCap) {
                     yBuf.put(yIdx, yVal.toByte())
+                    if (yIdx + 1 > maxYWritten) maxYWritten = yIdx + 1
                 }
             }
         }
 
         // 2. Chroma (Cb/Cr) عبر متوسط مربع 2x2 بكسل بمعاملات ITU-R BT.709
+        var maxUWritten = 0
+        var maxVWritten = 0
         val halfH = height / 2
         val halfW = width / 2
         for (uy in 0 until halfH) {
@@ -597,18 +877,29 @@ class MainActivity : FlutterFragmentActivity() {
 
                 val uIdx = uRowOffset + ux * uPixelStride
                 val vIdx = vRowOffset + ux * vPixelStride
-                if (uIdx < uCap) uBuf.put(uIdx, uVal.toByte())
-                if (vIdx < vCap) vBuf.put(vIdx, vVal.toByte())
+                if (uIdx in 0 until uCap) {
+                    uBuf.put(uIdx, uVal.toByte())
+                    if (uIdx + 1 > maxUWritten) maxUWritten = uIdx + 1
+                }
+                if (vIdx in 0 until vCap) {
+                    vBuf.put(vIdx, vVal.toByte())
+                    if (vIdx + 1 > maxVWritten) maxVWritten = vIdx + 1
+                }
             }
         }
+
+        val logicalYuvSize = (width * height * 3) / 2
+        val actualPlaneSpan = maxYWritten + max(maxUWritten, maxVWritten)
+        return min(logicalYuvSize, max(1, actualPlaneSpan))
     }
 
+    /// تحويل ARGB إلى NV12 وكتابتها في `ByteBuffer` مع إرجاع عدد البايتات الصالحة المكتوبة فعلياً (VID-006 / VID-011)
     private fun fillBt709Nv12BufferFromArgb(
         argb: IntArray,
         buffer: ByteBuffer,
         width: Int,
         height: Int
-    ) {
+    ): Int {
         val frameSize = width * height
         val yuv = ByteArray((frameSize * 3) / 2)
         var yIndex = 0
@@ -646,7 +937,9 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
         }
-        buffer.put(yuv, 0, min(buffer.remaining(), yuv.size))
+        val bytesToWrite = min(buffer.remaining(), yuv.size)
+        buffer.put(yuv, 0, bytesToWrite)
+        return bytesToWrite
     }
 
     // ─── Audio Decoding (MP3/WAV/M4A) + Stereo Normalization + AAC Encoding ───
@@ -728,18 +1021,32 @@ class MainActivity : FlutterFragmentActivity() {
         var decoderDone = false
         var extractorEOS = false
 
-        while (!decoderDone && pcmOut.size() < targetTotalPcmBytes) {
-            if (!extractorEOS) {
-                val inIdx = decoder.dequeueInputBuffer(10_000)
-                if (inIdx >= 0) {
-                    val inBuf = decoder.getInputBuffer(inIdx) ?: scratchBuf
-                    inBuf.clear()
-                    val sampleSize = extractor.readSampleData(inBuf, 0)
-                    if (sampleSize < 0) {
-                        if (loopIfShorter) {
-                            extractor.seekTo(0L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-                            val retrySize = extractor.readSampleData(inBuf, 0)
-                            if (retrySize < 0) {
+        try {
+            while (!decoderDone && pcmOut.size() < targetTotalPcmBytes) {
+                if (!extractorEOS) {
+                    val inIdx = decoder.dequeueInputBuffer(10_000)
+                    if (inIdx >= 0) {
+                        val inBuf = decoder.getInputBuffer(inIdx) ?: scratchBuf
+                        inBuf.clear()
+                        val sampleSize = extractor.readSampleData(inBuf, 0)
+                        if (sampleSize < 0) {
+                            if (loopIfShorter) {
+                                extractor.seekTo(0L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                                val retrySize = extractor.readSampleData(inBuf, 0)
+                                if (retrySize < 0) {
+                                    decoder.queueInputBuffer(
+                                        inIdx,
+                                        0,
+                                        0,
+                                        0L,
+                                        MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                                    )
+                                    extractorEOS = true
+                                } else {
+                                    decoder.queueInputBuffer(inIdx, 0, retrySize, extractor.sampleTime, 0)
+                                    extractor.advance()
+                                }
+                            } else {
                                 decoder.queueInputBuffer(
                                     inIdx,
                                     0,
@@ -748,50 +1055,44 @@ class MainActivity : FlutterFragmentActivity() {
                                     MediaCodec.BUFFER_FLAG_END_OF_STREAM
                                 )
                                 extractorEOS = true
-                            } else {
-                                decoder.queueInputBuffer(inIdx, 0, retrySize, extractor.sampleTime, 0)
-                                extractor.advance()
                             }
                         } else {
-                            decoder.queueInputBuffer(
-                                inIdx,
-                                0,
-                                0,
-                                0L,
-                                MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                            )
-                            extractorEOS = true
+                            decoder.queueInputBuffer(inIdx, 0, sampleSize, extractor.sampleTime, 0)
+                            extractor.advance()
                         }
-                    } else {
-                        decoder.queueInputBuffer(inIdx, 0, sampleSize, extractor.sampleTime, 0)
-                        extractor.advance()
                     }
                 }
-            }
 
-            val outStatus = decoder.dequeueOutputBuffer(decInfo, 10_000)
-            if (outStatus >= 0) {
-                val outBuf = decoder.getOutputBuffer(outStatus)
-                if (outBuf != null && decInfo.size > 0) {
-                    outBuf.position(decInfo.offset)
-                    outBuf.limit(decInfo.offset + decInfo.size)
-                    val chunk = ByteArray(decInfo.size)
-                    outBuf.get(chunk)
-                    val needed = targetTotalPcmBytes - pcmOut.size()
-                    pcmOut.write(chunk, 0, min(chunk.size, needed))
+                val outStatus = decoder.dequeueOutputBuffer(decInfo, 10_000)
+                if (outStatus >= 0) {
+                    val outBuf = decoder.getOutputBuffer(outStatus)
+                    if (outBuf != null && decInfo.size > 0) {
+                        outBuf.position(decInfo.offset)
+                        outBuf.limit(decInfo.offset + decInfo.size)
+                        val chunk = ByteArray(decInfo.size)
+                        outBuf.get(chunk)
+                        val needed = targetTotalPcmBytes - pcmOut.size()
+                        pcmOut.write(chunk, 0, min(chunk.size, needed))
+                    }
+                    decoder.releaseOutputBuffer(outStatus, false)
+                    if ((decInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                        decoderDone = true
+                    }
+                } else if (outStatus == MediaCodec.INFO_TRY_AGAIN_LATER && extractorEOS) {
+                    break
                 }
-                decoder.releaseOutputBuffer(outStatus, false)
-                if ((decInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                    decoderDone = true
-                }
-            } else if (outStatus == MediaCodec.INFO_TRY_AGAIN_LATER && extractorEOS) {
-                break
             }
+        } finally {
+            try {
+                decoder.stop()
+            } catch (_: Exception) {}
+            try {
+                decoder.release()
+            } catch (_: Exception) {}
+            try {
+                extractor.release()
+            } catch (_: Exception) {}
         }
-
-        decoder.stop()
-        decoder.release()
-        extractor.release()
 
         val rawPcmBytes = pcmOut.toByteArray()
         if (rawPcmBytes.isEmpty()) return null
@@ -810,11 +1111,11 @@ class MainActivity : FlutterFragmentActivity() {
         val rawPcmBytes = decoded.first
         val sampleRate = decoded.second
         val channelCount = decoded.third
-        val bytesPerSecond = sampleRate * channelCount * 2
 
         applyVolumeAndFadesToPcm16(
             pcmBytes = rawPcmBytes,
-            bytesPerSecond = bytesPerSecond,
+            sampleRate = sampleRate,
+            channelCount = channelCount,
             baseVolume = volume.coerceIn(0.0, 1.5),
             fadeIn = fadeIn,
             fadeOut = fadeOut
@@ -847,117 +1148,175 @@ class MainActivity : FlutterFragmentActivity() {
         var encInputDone = false
         var encOutputDone = false
 
-        while (!encOutputDone) {
-            if (!encInputDone) {
-                val inIdx = encoder.dequeueInputBuffer(10_000)
-                if (inIdx >= 0) {
-                    val inBuf = encoder.getInputBuffer(inIdx)
-                    if (pcmCursor >= rawPcmBytes.size || inBuf == null) {
-                        val ptsUs = (pcmCursor.toLong() * 1_000_000L) / bytesPerSecond.toLong()
-                        encoder.queueInputBuffer(
-                            inIdx,
-                            0,
-                            0,
-                            ptsUs,
-                            MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                        )
-                        encInputDone = true
-                    } else {
-                        inBuf.clear()
-                        val chunkLen = min(min(4096, inBuf.remaining()), rawPcmBytes.size - pcmCursor)
-                        inBuf.put(rawPcmBytes, pcmCursor, chunkLen)
-                        val ptsUs = (pcmCursor.toLong() * 1_000_000L) / bytesPerSecond.toLong()
-                        encoder.queueInputBuffer(inIdx, 0, chunkLen, ptsUs, 0)
-                        pcmCursor += chunkLen
-                    }
-                }
-            }
-
-            val outStatus = encoder.dequeueOutputBuffer(encInfo, 10_000)
-            when {
-                outStatus == MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                    if (encInputDone) Thread.sleep(5)
-                }
-                outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    aacOutFormat = encoder.outputFormat
-                }
-                outStatus >= 0 -> {
-                    val outBuf = encoder.getOutputBuffer(outStatus)
-                    if (outBuf != null && encInfo.size > 0 &&
-                        (encInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
-                    ) {
-                        outBuf.position(encInfo.offset)
-                        outBuf.limit(encInfo.offset + encInfo.size)
-                        val data = ByteArray(encInfo.size)
-                        outBuf.get(data)
-                        aacPackets.add(
-                            EncodedPacket(
-                                data = data,
-                                presentationTimeUs = encInfo.presentationTimeUs,
-                                flags = encInfo.flags
+        try {
+            while (!encOutputDone) {
+                if (!encInputDone) {
+                    val inIdx = encoder.dequeueInputBuffer(10_000)
+                    if (inIdx >= 0) {
+                        val inBuf = encoder.getInputBuffer(inIdx)
+                        if (pcmCursor >= rawPcmBytes.size || inBuf == null) {
+                            val ptsUs = (pcmCursor.toLong() * 1_000_000L) / bytesPerSecond.toLong()
+                            encoder.queueInputBuffer(
+                                inIdx,
+                                0,
+                                0,
+                                ptsUs,
+                                MediaCodec.BUFFER_FLAG_END_OF_STREAM
                             )
-                        )
+                            encInputDone = true
+                        } else {
+                            inBuf.clear()
+                            val chunkLen = min(min(4096, inBuf.remaining()), rawPcmBytes.size - pcmCursor)
+                            inBuf.put(rawPcmBytes, pcmCursor, chunkLen)
+                            val ptsUs = (pcmCursor.toLong() * 1_000_000L) / bytesPerSecond.toLong()
+                            encoder.queueInputBuffer(inIdx, 0, chunkLen, ptsUs, 0)
+                            pcmCursor += chunkLen
+                        }
                     }
-                    encoder.releaseOutputBuffer(outStatus, false)
-                    if ((encInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                        encOutputDone = true
+                }
+
+                val outStatus = encoder.dequeueOutputBuffer(encInfo, 10_000)
+                when {
+                    outStatus == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                        if (encInputDone) Thread.sleep(5)
+                    }
+                    outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        aacOutFormat = encoder.outputFormat
+                    }
+                    outStatus >= 0 -> {
+                        val outBuf = encoder.getOutputBuffer(outStatus)
+                        if (outBuf != null && encInfo.size > 0 &&
+                            (encInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
+                        ) {
+                            outBuf.position(encInfo.offset)
+                            outBuf.limit(encInfo.offset + encInfo.size)
+                            val data = ByteArray(encInfo.size)
+                            outBuf.get(data)
+                            aacPackets.add(
+                                EncodedPacket(
+                                    data = data,
+                                    presentationTimeUs = encInfo.presentationTimeUs,
+                                    flags = encInfo.flags
+                                )
+                            )
+                        }
+                        encoder.releaseOutputBuffer(outStatus, false)
+                        if ((encInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            encOutputDone = true
+                        }
                     }
                 }
             }
-        }
 
-        val finalAacFormat = aacOutFormat ?: encoder.outputFormat
-        encoder.stop()
-        encoder.release()
-        return Pair(finalAacFormat, aacPackets)
+            val finalAacFormat = aacOutFormat ?: encoder.outputFormat
+            return Pair(finalAacFormat, aacPackets)
+        } finally {
+            try {
+                encoder.stop()
+            } catch (_: Exception) {}
+            try {
+                encoder.release()
+            } catch (_: Exception) {}
+        }
     }
 
+    /// حساب التلاشي (Fade-In / Fade-Out) ومستوى الصوت ومحدد الذروة بدقة الإطار الصوتي (Audio Frame)
+    /// بحيث يتطابق سلوك Stereo و Mono تماماً مع تنفيذ Rust دون انحراف بين القناتين L و R (VID-001)
     private fun applyVolumeAndFadesToPcm16(
         pcmBytes: ByteArray,
-        bytesPerSecond: Int,
+        sampleRate: Int,
+        channelCount: Int,
         baseVolume: Double,
         fadeIn: Boolean,
         fadeOut: Boolean
     ) {
-        val totalSamples = pcmBytes.size / 2
-        val totalSeconds = pcmBytes.size.toDouble() / max(1, bytesPerSecond).toDouble()
-        val fadeWindowSec = 1.2
+        val safeRate = max(1, sampleRate)
+        val safeChannels = max(1, channelCount)
+        val frameByteStride = safeChannels * 2
+        val totalFrames = pcmBytes.size / frameByteStride
+        if (totalFrames <= 0) return
+
+        val totalSeconds = totalFrames.toDouble() / safeRate.toDouble()
+        val defaultFadeSec = 1.2
+        val fadeWindowSec = when {
+            fadeIn && fadeOut -> min(defaultFadeSec, totalSeconds * 0.5)
+            fadeIn || fadeOut -> min(defaultFadeSec, totalSeconds)
+            else -> 0.0
+        }
+
         val kneeStart = 28000.0
         val maxCeiling = 32700.0
         val headroom = maxCeiling - kneeStart
 
-        var byteIdx = 0
-        for (sampleIdx in 0 until totalSamples) {
-            val currentSec = (sampleIdx * 2).toDouble() / max(1, bytesPerSecond).toDouble()
+        for (frameIdx in 0 until totalFrames) {
+            val currentSec = frameIdx.toDouble() / safeRate.toDouble()
+            val remainingFrames = max(0, totalFrames - 1 - frameIdx)
+            val remainingSec = remainingFrames.toDouble() / safeRate.toDouble()
+
             var gain = baseVolume
-            if (fadeIn && currentSec < fadeWindowSec) {
+            if (fadeIn && fadeWindowSec > 1e-9 && currentSec < fadeWindowSec) {
                 val ratio = (currentSec / fadeWindowSec).coerceIn(0.0, 1.0)
                 gain *= sin(ratio * PI * 0.5)
             }
-            if (fadeOut && (totalSeconds - currentSec) < fadeWindowSec) {
-                val ratio = ((totalSeconds - currentSec) / fadeWindowSec).coerceIn(0.0, 1.0)
+            if (fadeOut && fadeWindowSec > 1e-9 && remainingSec < fadeWindowSec) {
+                val ratio = (remainingSec / fadeWindowSec).coerceIn(0.0, 1.0)
                 gain *= sin(ratio * PI * 0.5)
             }
 
-            val lo = pcmBytes[byteIdx].toInt() and 0xFF
-            val hi = pcmBytes[byteIdx + 1].toInt()
-            val sample = ((hi shl 8) or lo).toDouble() * gain
-            val absS = kotlin.math.abs(sample)
-            val limited = if (absS <= kneeStart) {
-                sample.roundToInt()
-            } else {
-                val sign = if (sample >= 0.0) 1.0 else -1.0
-                val compressed = kneeStart + headroom * tanh((absS - kneeStart) / headroom)
-                (sign * compressed).roundToInt().coerceIn(-32767, 32767)
-            }
+            val frameBase = frameIdx * frameByteStride
+            for (ch in 0 until safeChannels) {
+                val byteIdx = frameBase + ch * 2
+                val lo = pcmBytes[byteIdx].toInt() and 0xFF
+                val hi = pcmBytes[byteIdx + 1].toInt()
+                val sample = ((hi shl 8) or lo).toDouble() * gain
+                val absS = abs(sample)
+                val limited = if (absS <= kneeStart) {
+                    sample.roundToInt()
+                } else {
+                    val sign = if (sample >= 0.0) 1.0 else -1.0
+                    val compressed = kneeStart + headroom * tanh((absS - kneeStart) / headroom)
+                    (sign * compressed).roundToInt().coerceIn(-32767, 32767)
+                }
 
-            pcmBytes[byteIdx] = (limited and 0xFF).toByte()
-            pcmBytes[byteIdx + 1] = ((limited shr 8) and 0xFF).toByte()
-            byteIdx += 2
+                pcmBytes[byteIdx] = (limited and 0xFF).toByte()
+                pcmBytes[byteIdx + 1] = ((limited shr 8) and 0xFF).toByte()
+            }
         }
     }
 
-    // ─── Save to Public Downloads AND Gallery (MediaStore.Video + Downloads) ───
+    // ─── Container MIME Inspection, Save & Share (VID-008) ─────────────────────
+
+    /// فحص التوقيع الثنائي للحاوية لتحديد نوع MIME الفعلي بدقة دون الاعتماد الأعمى على الامتداد (VID-008)
+    private fun detectContainerMimeType(file: File): String {
+        try {
+            if (file.exists() && file.length() >= 12L) {
+                RandomAccessFile(file, "r").use { raf ->
+                    val hdr = ByteArray(12)
+                    if (raf.read(hdr) == 12) {
+                        if (hdr[0] == 0x52.toByte() &&
+                            hdr[1] == 0x49.toByte() &&
+                            hdr[2] == 0x46.toByte() &&
+                            hdr[3] == 0x46.toByte() &&
+                            hdr[8] == 0x41.toByte() &&
+                            hdr[9] == 0x56.toByte() &&
+                            hdr[10] == 0x49.toByte() &&
+                            hdr[11] == 0x20.toByte()
+                        ) {
+                            return "video/x-msvideo"
+                        }
+                        if (hdr[4] == 0x66.toByte() &&
+                            hdr[5] == 0x74.toByte() &&
+                            hdr[6] == 0x79.toByte() &&
+                            hdr[7] == 0x70.toByte()
+                        ) {
+                            return "video/mp4"
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return if (file.extension.lowercase() == "avi") "video/x-msvideo" else "video/mp4"
+    }
 
     private fun saveFileToDownloadsAndGallery(
         sourcePath: String,
@@ -969,16 +1328,25 @@ class MainActivity : FlutterFragmentActivity() {
             throw IllegalArgumentException("Source file does not exist: $sourcePath")
         }
 
+        val actualMime = detectContainerMimeType(srcFile)
+        val expectedExt = if (actualMime == "video/x-msvideo") "avi" else "mp4"
+        val normalizedFileName = if (fileName.lowercase().endsWith(".$expectedExt")) {
+            fileName
+        } else {
+            val base = fileName.substringBeforeLast('.', fileName)
+            "$base.$expectedExt"
+        }
+
         val subFolder = "OurLoveStory"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val resolver = applicationContext.contentResolver
 
-            // 1. التسجيل في معرض الفيديو (Movies/OurLoveStory) ليظهر مباشرة في تطبيق "المعرض / Gallery"
-            if (mimeType.startsWith("video/")) {
+            // 1. التسجيل في معرض الفيديو (Movies/OurLoveStory) بنوع MIME الفعلي للحاوية (VID-008)
+            if (actualMime.startsWith("video/")) {
                 try {
                     val videoValues = ContentValues().apply {
-                        put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
-                        put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                        put(MediaStore.Video.Media.DISPLAY_NAME, normalizedFileName)
+                        put(MediaStore.Video.Media.MIME_TYPE, actualMime)
                         put(
                             MediaStore.Video.Media.RELATIVE_PATH,
                             "${Environment.DIRECTORY_MOVIES}/$subFolder"
@@ -1004,8 +1372,8 @@ class MainActivity : FlutterFragmentActivity() {
 
             // 2. التسجيل في مجلد التنزيلات العام (Download/OurLoveStory)
             val downloadValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                put(MediaStore.MediaColumns.DISPLAY_NAME, normalizedFileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, actualMime)
                 put(
                     MediaStore.MediaColumns.RELATIVE_PATH,
                     "${Environment.DIRECTORY_DOWNLOADS}/$subFolder"
@@ -1027,7 +1395,7 @@ class MainActivity : FlutterFragmentActivity() {
             downloadValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
             resolver.update(itemUri, downloadValues, null, null)
 
-            return "/storage/emulated/0/${Environment.DIRECTORY_DOWNLOADS}/$subFolder/$fileName"
+            return "/storage/emulated/0/${Environment.DIRECTORY_DOWNLOADS}/$subFolder/$normalizedFileName"
         } else {
             val downloadsDir = Environment.getExternalStoragePublicDirectory(
                 Environment.DIRECTORY_DOWNLOADS
@@ -1036,7 +1404,7 @@ class MainActivity : FlutterFragmentActivity() {
             if (!targetDir.exists()) {
                 targetDir.mkdirs()
             }
-            val destFile = File(targetDir, fileName)
+            val destFile = File(targetDir, normalizedFileName)
             FileInputStream(srcFile).use { inStream ->
                 FileOutputStream(destFile).use { outStream ->
                     inStream.copyTo(outStream, bufferSize = 64 * 1024)
@@ -1045,46 +1413,82 @@ class MainActivity : FlutterFragmentActivity() {
             MediaScannerConnection.scanFile(
                 applicationContext,
                 arrayOf(destFile.absolutePath),
-                arrayOf(mimeType),
+                arrayOf(actualMime),
                 null
             )
             return destFile.absolutePath
         }
     }
 
-    private fun shareOrOpenMedia(filePath: String, title: String) {
+    private fun shareOrOpenMedia(filePath: String, title: String, requestedMime: String? = null) {
         val srcFile = File(filePath)
-        if (!srcFile.exists()) return
+        if (!srcFile.exists() || srcFile.length() <= 0L) {
+            throw IllegalArgumentException("Cannot share non-existent or empty video file: $filePath")
+        }
+
+        // تحديد نوع MIME الفعلي من ترويسة الحاوية (MP4 سواء كان H.264 أو HEVC -> video/mp4، و AVI -> video/x-msvideo) (VID-008)
+        val actualMime = detectContainerMimeType(srcFile)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val resolver = applicationContext.contentResolver
-            val isMp4 = srcFile.extension.lowercase() == "mp4"
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, srcFile.name)
-                put(MediaStore.MediaColumns.MIME_TYPE, if (isMp4) "video/mp4" else "video/avi")
+                put(MediaStore.MediaColumns.MIME_TYPE, actualMime)
                 put(
                     MediaStore.MediaColumns.RELATIVE_PATH,
                     "${Environment.DIRECTORY_DOWNLOADS}/OurLoveStory"
                 )
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
             val uri = resolver.insert(
                 MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
                 values
-            )
-            if (uri != null) {
+            ) ?: throw IllegalStateException("Failed to create shareable MediaStore URI")
+
+            try {
                 resolver.openOutputStream(uri)?.use { out ->
                     FileInputStream(srcFile).use { input ->
-                        input.copyTo(out)
+                        input.copyTo(out, bufferSize = 64 * 1024)
                     }
-                }
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "video/mp4"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    putExtra(Intent.EXTRA_TITLE, title)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                startActivity(Intent.createChooser(shareIntent, title))
+                } ?: throw IllegalStateException("Failed to open output stream for share URI")
+
+                values.clear()
+                values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+            } catch (e: Exception) {
+                try {
+                    resolver.delete(uri, null, null)
+                } catch (_: Exception) {}
+                throw e
             }
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = actualMime
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_TITLE, title)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(shareIntent, title))
+        } else {
+            // دعم إصدارات أندرويد الأقدم من Android 10 (API < 29) عبر MediaStore.Video
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.TITLE, title)
+                put(MediaStore.Video.Media.DISPLAY_NAME, srcFile.name)
+                put(MediaStore.Video.Media.MIME_TYPE, actualMime)
+                put(MediaStore.Video.Media.DATA, srcFile.absolutePath)
+            }
+            val uri = applicationContext.contentResolver.insert(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                values
+            ) ?: Uri.fromFile(srcFile)
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = actualMime
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_TITLE, title)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(shareIntent, title))
         }
     }
 
