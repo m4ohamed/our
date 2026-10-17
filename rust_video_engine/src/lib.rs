@@ -1,4 +1,4 @@
-```rust
+
 // rust_video_engine/src/lib.rs
 // محرك Rust احترافي مستلهم من معمارية FilmCraft (storytold/filmcraft) و EffectCraft (storytold/effectcraft)
 // يضم:
@@ -1068,4 +1068,3 @@ fn write_avi_container(
     f.flush()?;
     Ok(())
 }
-```
