@@ -10,9 +10,8 @@
 
 use std::f64::consts::PI;
 use std::fs::File;
-use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufWriter, Read, Write};
 use std::slice;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
 /// عدد النبضات الزمنية في الثانية الواحدة كما في `filmcraft-time`
@@ -1788,7 +1787,7 @@ mod tests {
             stereo_bytes[(total_frames - 1) * 4 + 1],
         ]);
         assert_eq!(first_stereo, 0);
-        assert_eq!(mid_stereo, 20000);
+        assert_eq!( mid_stereo, 20000);
         assert_eq!(last_stereo, 0);
     }
 
@@ -1838,7 +1837,7 @@ mod tests {
 
     #[test]
     fn test_vid004_and_vid011_nv12_bounds_and_odd_dimensions() {
-        let mut rgba = vec![255u8; 16 * 16 * 4];
+        let rgba = vec![255u8; 16 * 16 * 4];
         let mut nv12 = vec![0u8; (16 * 16 * 3) / 2];
 
         unsafe {
