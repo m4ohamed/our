@@ -1,3 +1,4 @@
+```dart
 // lib/core/services/rust_video_bridge.dart
 import 'dart:async';
 import 'dart:convert';
@@ -1439,7 +1440,7 @@ class RustVideoBridge {
               240,
             );
         final vVal =
-            (((112 * rAvg - 102 * gAvg - 10 * b_avg + 128) >> 8) + 128).clamp(
+            (((112 * rAvg - 102 * gAvg - 10 * bAvg + 128) >> 8) + 128).clamp(
               16,
               240,
             );
