@@ -375,10 +375,11 @@ class MainActivity : FlutterFragmentActivity() {
         var audioFormat: MediaFormat? = null
         var audioPackets: List<EncodedPacket> = emptyList()
         if (!processedPcmPath.isNullOrBlank() && File(processedPcmPath).exists()) {
-            val pcmBytes = File(processedPcmPath).readBytes()
-            if (pcmBytes.isNotEmpty()) {
-                val encoded = encodeRawPcm16ToAac(
-                    rawPcmBytes = pcmBytes,
+            val pcmFile = File(processedPcmPath)
+            if (pcmFile.length() > 0L) {
+                // ترميز الصوت بالتدفق في دفعات مجزأة (16 KB) بدون تحميل الملف كاملاً في الذاكرة (Item 3)
+                val encoded = encodePcmFileStreamToAac(
+                    pcmFile = pcmFile,
                     sampleRate = pcmSampleRate,
                     channelCount = pcmChannels
                 )
@@ -1172,6 +1173,108 @@ class MainActivity : FlutterFragmentActivity() {
         )
 
         return encodeRawPcm16ToAac(rawPcmBytes, sampleRate, channelCount)
+    }
+
+
+    /// ترميز تيار ملف PCM 16-bit إلى AAC بدفعات تدفقية 16 كيلوبايت دون قراءة الملف كاملاً في RAM (Item 3)
+    private fun encodePcmFileStreamToAac(
+        pcmFile: File,
+        sampleRate: Int,
+        channelCount: Int
+    ): Pair<MediaFormat, List<EncodedPacket>> {
+        val bytesPerSecond = max(1, sampleRate * channelCount * 2)
+        val aacMime = MediaFormat.MIMETYPE_AUDIO_AAC
+        val aacFormat = MediaFormat.createAudioFormat(aacMime, sampleRate, channelCount).apply {
+            setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+            setInteger(MediaFormat.KEY_BIT_RATE, 128_000)
+            setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
+        }
+
+        val encoder = MediaCodec.createEncoderByType(aacMime)
+        encoder.configure(aacFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        encoder.start()
+
+        val aacPackets = ArrayList<EncodedPacket>()
+        var aacOutFormat: MediaFormat? = null
+        val encInfo = MediaCodec.BufferInfo()
+        val chunkBuffer = ByteArray(16384)
+        var totalBytesRead = 0L
+        var encInputDone = false
+        var encOutputDone = false
+
+        FileInputStream(pcmFile).use { fis ->
+            try {
+                while (!encOutputDone) {
+                    if (!encInputDone) {
+                        val inIdx = encoder.dequeueInputBuffer(10_000)
+                        if (inIdx >= 0) {
+                            val inBuf = encoder.getInputBuffer(inIdx)
+                            if (inBuf == null) {
+                                Thread.sleep(2)
+                            } else {
+                                inBuf.clear()
+                                val maxChunk = min(chunkBuffer.size, inBuf.remaining())
+                                val bytesRead = fis.read(chunkBuffer, 0, maxChunk)
+                                if (bytesRead <= 0) {
+                                    val ptsUs = (totalBytesRead * 1_000_000L) / bytesPerSecond.toLong()
+                                    encoder.queueInputBuffer(
+                                        inIdx,
+                                        0,
+                                        0,
+                                        ptsUs,
+                                        MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                                    )
+                                    encInputDone = true
+                                } else {
+                                    inBuf.put(chunkBuffer, 0, bytesRead)
+                                    val ptsUs = (totalBytesRead * 1_000_000L) / bytesPerSecond.toLong()
+                                    encoder.queueInputBuffer(inIdx, 0, bytesRead, ptsUs, 0)
+                                    totalBytesRead += bytesRead
+                                }
+                            }
+                        }
+                    }
+
+                    val outStatus = encoder.dequeueOutputBuffer(encInfo, 10_000)
+                    when {
+                        outStatus == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                            if (encInputDone) Thread.sleep(5)
+                        }
+                        outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            aacOutFormat = encoder.outputFormat
+                        }
+                        outStatus >= 0 -> {
+                            val outBuf = encoder.getOutputBuffer(outStatus)
+                            if (outBuf != null && encInfo.size > 0 &&
+                                (encInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
+                            ) {
+                                outBuf.position(encInfo.offset)
+                                outBuf.limit(encInfo.offset + encInfo.size)
+                                val data = ByteArray(encInfo.size)
+                                outBuf.get(data)
+                                aacPackets.add(
+                                    EncodedPacket(
+                                        data = data,
+                                        presentationTimeUs = encInfo.presentationTimeUs,
+                                        flags = encInfo.flags
+                                    )
+                                )
+                            }
+                            encoder.releaseOutputBuffer(outStatus, false)
+                            if ((encInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                encOutputDone = true
+                            }
+                        }
+                    }
+                }
+            } finally {
+                try { encoder.stop() } catch (_: Exception) {}
+                try { encoder.release() } catch (_: Exception) {}
+            }
+        }
+
+        val finalAacFormat = aacOutFormat ?: encoder.outputFormat
+        return Pair(finalAacFormat, aacPackets)
     }
 
     private fun encodeRawPcm16ToAac(
