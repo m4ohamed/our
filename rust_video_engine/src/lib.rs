@@ -1713,6 +1713,80 @@ pub unsafe extern "C" fn rust_validate_avi_file(path_ptr: *const u8, path_len: u
     }
 }
 
+
+// ─── Native GPU Shader & MVP Matrix Pipeline Bindings (Rust + GPU) ───────────
+
+/// توليد شادر الألوان Lumetri و Vignette بدقة حاسوبية عتادية بلغة GLSL لاستخدامه في شيدرز الـ GPU مباشرة
+#[no_mangle]
+pub unsafe extern "C" fn rust_gpu_generate_lumetri_glsl(
+    exposure: f64,
+    contrast: f64,
+    saturation: f64,
+    temperature: f64,
+    faded_film: f64,
+    vignette: f64,
+    out_matrix_20: *mut f32,
+    out_vignette: *mut f32,
+) -> i32 {
+    if out_matrix_20.is_null() || out_vignette.is_null() {
+        return -1;
+    }
+    let m = compute_lumetri_matrix_array(exposure, contrast, saturation, temperature, faded_film);
+    let out_slice = slice::from_raw_parts_mut(out_matrix_20, 20);
+    for i in 0..20 {
+        out_slice[i] = m[i] as f32;
+    }
+    *out_vignette = vignette.clamp(0.0, 0.85) as f32;
+    0
+}
+
+/// حساب مصفوفة التحويل ثلاثية الأبعاد (4x4 MVP Matrix) لأي إطار زمني في GPU لتنفيذ الحركة والتحجيم والدوران عتادياً
+#[no_mangle]
+pub unsafe extern "C" fn rust_gpu_compute_mvp_matrix(
+    x: f64,
+    y: f64,
+    scale: f64,
+    rotation_degrees: f64,
+    out_matrix_16: *mut f32,
+) -> i32 {
+    if out_matrix_16.is_null() {
+        return -1;
+    }
+    let rad = rotation_degrees * (PI / 180.0);
+    let cos_r = rad.cos() as f32;
+    let sin_r = rad.sin() as f32;
+    let s = scale.clamp(0.1, 5.0) as f32;
+    let tx = (x * 2.0) as f32;
+    let ty = (-y * 2.0) as f32; // قلب محور Y ليتوافق مع OpenGL
+
+    let out = slice::from_raw_parts_mut(out_matrix_16, 16);
+    // العمود 0
+    out[0] = s * cos_r;
+    out[1] = s * sin_r;
+    out[2] = 0.0;
+    out[3] = 0.0;
+
+    // العمود 1
+    out[4] = -s * sin_r;
+    out[5] = s * cos_r;
+    out[6] = 0.0;
+    out[7] = 0.0;
+
+    // العمود 2
+    out[8] = 0.0;
+    out[9] = 0.0;
+    out[10] = 1.0;
+    out[11] = 0.0;
+
+    // العمود 3 (الإزاحة)
+    out[12] = tx;
+    out[13] = ty;
+    out[14] = 0.0;
+    out[15] = 1.0;
+
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
