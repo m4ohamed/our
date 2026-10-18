@@ -601,6 +601,19 @@ class MainActivity : FlutterFragmentActivity() {
                     audioFormat = encoded.first
                     audioPackets = encoded.second
                 }
+            } else if (!audioPath.isNullOrBlank() && File(audioPath).exists()) {
+                val transcoded = transcodeAudioToAac(
+                    audioPath = audioPath,
+                    startOffsetUs = 0L,
+                    totalDurationUs = 600_000_000L,
+                    volume = 0.85,
+                    fadeIn = true,
+                    fadeOut = true
+                )
+                if (transcoded != null) {
+                    audioFormat = transcoded.first
+                    audioPackets = transcoded.second
+                }
             }
 
             // 2. محاولة بدء مسار GPU Surface المباشر، مع سقوط آمن لمسار CPU عند الضرورة
@@ -1419,6 +1432,8 @@ class MainActivity : FlutterFragmentActivity() {
             var outFrameIndex = 0
             var inputDone = false
             var outputDone = false
+            var eosTryAgainCount = 0
+            val maxEosRetries = 250
 
             RandomAccessFile(aviFile, "r").use { raf ->
                 while (!outputDone) {
@@ -1510,7 +1525,14 @@ class MainActivity : FlutterFragmentActivity() {
                     val outStatus = encoder.dequeueOutputBuffer(bufferInfo, 10_000)
                     when {
                         outStatus == MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                            if (inputDone) Thread.sleep(4)
+                            if (inputDone) {
+                                eosTryAgainCount++
+                                if (eosTryAgainCount > maxEosRetries) {
+                                    outputDone = true
+                                } else {
+                                    Thread.sleep(4)
+                                }
+                            }
                         }
                         outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                             if (muxerStarted) {
@@ -1524,6 +1546,7 @@ class MainActivity : FlutterFragmentActivity() {
                             muxerStarted = true
                         }
                         outStatus >= 0 -> {
+                            eosTryAgainCount = 0
                             val outBuf = encoder.getOutputBuffer(outStatus)
                             if (outBuf != null &&
                                 bufferInfo.size > 0 &&
@@ -1663,7 +1686,12 @@ class MainActivity : FlutterFragmentActivity() {
         }
 
         val logicalYuvSize = (width * height * 3) / 2
-        val actualPlaneSpan = maxYWritten + max(maxUWritten, maxVWritten)
+        val chromaSpan = if (uPixelStride == 1 && vPixelStride == 1) {
+            maxUWritten + maxVWritten
+        } else {
+            max(maxUWritten, maxVWritten)
+        }
+        val actualPlaneSpan = maxYWritten + chromaSpan
         return max(logicalYuvSize, actualPlaneSpan)
     }
 
