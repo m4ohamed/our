@@ -224,6 +224,19 @@ class OffscreenVideoCompositor {
           }
         } catch (e) {
           if (e is VideoExportException) rethrow;
+          throw VideoExportException(
+            stage: VideoExportStage.preparing,
+            message: 'فشل تحميل الأصل للمقطع "${clip.title}": ${e.toString()}',
+            cause: e,
+          );
+        }
+
+        // التحقق الصارم من وجود الصورة في الذاكرة لغير البطاقات الرومانسية (Item 4)
+        if (!result.containsKey(clip.id)) {
+          throw VideoExportException(
+            stage: VideoExportStage.preparing,
+            message: 'تعذر العثور على ملف الصورة أو الفيديو للمقطع "${clip.title}". يرجى التحقق من وجود الملف أو اتصال الإنترنت.',
+          );
         }
       }
       return result;

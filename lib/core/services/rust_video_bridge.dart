@@ -2933,6 +2933,7 @@ class RustVideoBridge {
                 'codecMime': config.codecMime,
                 'bitrateBps': config.bitrateBps,
                 'allowCodecFallback': false,
+                'useGpuSurface': true,
               },
             );
             if (nativeMp4 != null &&
