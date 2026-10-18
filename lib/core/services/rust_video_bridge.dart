@@ -522,6 +522,18 @@ typedef _ProcessPcm16AudioDart =
       int fadeOut,
     );
 
+typedef _ValidateAviFileNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> pathPtr,
+      ffi.Size pathLen,
+    );
+
+typedef _ValidateAviFileDart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> pathPtr,
+      int pathLen,
+    );
+
 typedef _MallocNative = ffi.Pointer<ffi.Void> Function(ffi.Size size);
 typedef _MallocDart = ffi.Pointer<ffi.Void> Function(int size);
 
@@ -575,6 +587,7 @@ class RustVideoBridge {
   _MuxFramesAndPcmToAviDart? _rustMuxFramesAndPcmToAvi;
   _MuxFramesAndPcmToAviCheckedDart? _rustMuxFramesAndPcmToAviChecked;
   _ProcessPcm16AudioDart? _rustProcessPcm16Audio;
+  _ValidateAviFileDart? _rustValidateAviFile;
 
   _MallocDart? _malloc;
   _FreeDart? _free;
@@ -769,6 +782,12 @@ class RustVideoBridge {
                 _MuxFramesAndPcmToAviCheckedNative,
                 _MuxFramesAndPcmToAviCheckedDart
               >('rust_mux_frames_and_pcm_to_avi_checked');
+        } catch (_) {}
+        try {
+          _rustValidateAviFile = lib
+              .lookupFunction<_ValidateAviFileNative, _ValidateAviFileDart>(
+                'rust_validate_avi_file',
+              );
         } catch (_) {}
       }
     } catch (_) {
@@ -2078,6 +2097,25 @@ class RustVideoBridge {
     final file = File(aviFilePath);
     if (!file.existsSync()) return 0;
 
+    final rustValidator = _rustValidateAviFile;
+    if (rustValidator != null) {
+      final pathBytes = utf8.encode(aviFilePath);
+      if (pathBytes.isNotEmpty && pathBytes.length <= 4096) {
+        final pathPtr = _alloc<ffi.Uint8>(pathBytes.length);
+        if (pathPtr != ffi.nullptr) {
+          try {
+            pathPtr.asTypedList(pathBytes.length).setAll(0, pathBytes);
+            final count = rustValidator(pathPtr, pathBytes.length);
+            if (count >= 0) {
+              return count;
+            }
+          } finally {
+            _freePtr(pathPtr);
+          }
+        }
+      }
+    }
+
     RandomAccessFile? raf;
     try {
       final int fileLen = await file.length();
@@ -2666,14 +2704,15 @@ class RustVideoBridge {
     final (int targetW, int targetH) = config.resolveDimensions(
       project.numericAspectRatio,
     );
+    final int requestedFps = fps > 0 ? fps : config.targetFps;
     final int resolvedTargetFps =
-        (project.totalDuration > 600.0 && config.targetFps >= 60)
+        (project.totalDuration > 600.0 && requestedFps >= 60)
             ? 30
-            : config.targetFps.clamp(15, 60);
+            : requestedFps.clamp(15, 60);
 
     final int activeWidth = width > 0 && width.isEven ? width : targetW;
     final int activeHeight = height > 0 && height.isEven ? height : targetH;
-    final int activeFps = fps > 0 ? fps : resolvedTargetFps;
+    final int activeFps = resolvedTargetFps;
 
     final int totalFrames = math.max(
       1,
@@ -2823,13 +2862,15 @@ class RustVideoBridge {
         await _mediaChannel.invokeMethod('startDirectMp4EncodeSession', {
           'outputMp4Path': mp4Path,
           'processedPcmPath': processedPcmFilePath,
+          'audioPath': preparedAudioPath,
           'pcmSampleRate': pcmSampleRate,
           'pcmChannels': pcmChannels,
-          'fps': activeFps,
+          'fps': resolvedTargetFps,
           'width': activeWidth,
           'height': activeHeight,
           'codecMime': config.codecMime,
           'bitrateBps': config.bitrateBps,
+          'cropToFill': config.cropToFill,
         });
 
         try {
@@ -2862,6 +2903,8 @@ class RustVideoBridge {
                 await _mediaChannel.invokeMethod('appendRgbaFrameToSession', {
                   'rgbaBytes': rgbaFrame,
                   'frameIndex': framesWrittenTotal,
+                  'width': w,
+                  'height': h,
                 });
                 framesWrittenTotal++;
               }
@@ -2948,14 +2991,15 @@ class RustVideoBridge {
                 'audioVolume': project.audioVolume,
                 'audioFadeIn': project.audioFadeIn,
                 'audioFadeOut': project.audioFadeOut,
-                'fps': activeFps,
-                'targetFps': activeFps,
+                'fps': resolvedTargetFps,
+                'targetFps': resolvedTargetFps,
                 'width': activeWidth,
                 'height': activeHeight,
                 'codecMime': config.codecMime,
                 'bitrateBps': config.bitrateBps,
                 'allowCodecFallback': false,
                 'useGpuSurface': true,
+                'cropToFill': config.cropToFill,
               },
             );
             if (nativeMp4 != null && File(nativeMp4).existsSync()) {
@@ -2991,9 +3035,7 @@ class RustVideoBridge {
         customFileName: publicFileName,
       );
 
-      final exportedFps = config.format == VideoExportFormat.aviLossless
-          ? activeFps
-          : config.targetFps;
+      final exportedFps = resolvedTargetFps;
 
       final projectJsonFile = File('${exportDir.path}/$baseName.json');
       final jsonMap = project.toJson()
@@ -3510,6 +3552,7 @@ class VideoExportConfig {
   final int targetFps;
   final int bitrateMbps;
   final int parallelBatchSize;
+  final bool cropToFill;
 
   const VideoExportConfig({
     this.format = VideoExportFormat.mp4H264,
@@ -3517,6 +3560,7 @@ class VideoExportConfig {
     this.targetFps = 30,
     this.bitrateMbps = 14,
     this.parallelBatchSize = 6,
+    this.cropToFill = false,
   });
 
   String get codecMime => switch (format) {
@@ -3557,6 +3601,7 @@ class VideoExportConfig {
     int? targetFps,
     int? bitrateMbps,
     int? parallelBatchSize,
+    bool? cropToFill,
   }) {
     return VideoExportConfig(
       format: format ?? this.format,
@@ -3564,6 +3609,7 @@ class VideoExportConfig {
       targetFps: targetFps ?? this.targetFps,
       bitrateMbps: bitrateMbps ?? this.bitrateMbps,
       parallelBatchSize: parallelBatchSize ?? this.parallelBatchSize,
+      cropToFill: cropToFill ?? this.cropToFill,
     );
   }
 }
