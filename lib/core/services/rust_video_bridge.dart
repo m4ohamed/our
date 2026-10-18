@@ -11,9 +11,6 @@ import 'package:path_provider/path_provider.dart';
 import '../../domain/entities/video_project_entity.dart';
 import 'offscreen_video_compositor.dart';
 
-// ─── Export Lifecycle, Cancellation & Diagnostics (VID-007 / VID-012 / VID-014) ─
-
-/// مراحل التصدير الصريحة لعرض التقدم الحقيقي وتشخيص أي فشل بدقة (VID-014)
 enum VideoExportStage {
   preparing,
   rendering,
@@ -36,7 +33,6 @@ enum VideoExportStage {
   };
 }
 
-/// رمز إلغاء التصدير لإيقاف الرندر أو المعالجة أو الترميز وتحرير الموارد فوراً (VID-014)
 class VideoExportCancelToken {
   bool _isCancelled = false;
   final List<void Function()> _listeners = <void Function()>[];
@@ -74,7 +70,6 @@ class VideoExportCancelToken {
   }
 }
 
-/// استثناء مخصص لمراحل تصدير الفيديو يحدد المرحلة الدقيقة وسبب التوقف (VID-012 / VID-014)
 class VideoExportException implements Exception {
   final VideoExportStage stage;
   final String message;
@@ -92,7 +87,6 @@ class VideoExportException implements Exception {
   String toString() => '[${stage.arabicLabel}] $message';
 }
 
-/// حالات معالجة Lumetri الصريحة لمنع النجاح الصامت عند الفشل (VID-007)
 enum LumetriProcessStatus {
   notRequired,
   appliedNative,
@@ -118,7 +112,6 @@ class LumetriBatchResult {
       status == LumetriProcessStatus.appliedDartFallback;
 }
 
-/// قدرات الترميز العتادي للجهاز لفحص دعم H.264 و HEVC قبل التصدير (VID-017)
 class DeviceEncoderCapabilities {
   final bool supportsH264;
   final bool supportsHevc;
@@ -134,8 +127,6 @@ class DeviceEncoderCapabilities {
     this.maxSupportedBitrateBps = 20000000,
   });
 }
-
-// ─── FFI Struct & Signatures ──────────────────────────────────────────────────
 
 final class _NativeTransform extends ffi.Struct {
   @ffi.Double()
@@ -537,20 +528,13 @@ typedef _MallocDart = ffi.Pointer<ffi.Void> Function(int size);
 typedef _FreeNative = ffi.Void Function(ffi.Pointer<ffi.Void> ptr);
 typedef _FreeDart = void Function(ffi.Pointer<ffi.Void> ptr);
 
-/// جسر هجين يربط تطبيق Flutter بمحرك Rust الأصلي (`librust_video_engine`)
 class RustVideoBridge {
   static final RustVideoBridge instance = RustVideoBridge._();
 
-  /// قاعدة التوقيت الدقيقة المعتمدة في FilmCraft: 254,016,000,000 نبضة في الثانية
   static const int ticksPerSecond = 254016000000;
-
-  /// الحد الأقصى لأبعاد الإطار (VID-004 / VID-011)
   static const int maxFrameDimension = 8192;
-
-  /// الحد الأقصى لعدد الإطارات في عملية تجميع واحدة (VID-004)
   static const int maxMuxFrames = 108000;
 
-  /// التوقيع القياسي لملفات PNG (8 بايت)
   static const List<int> pngSignature = <int>[
     0x89,
     0x50,
@@ -595,9 +579,6 @@ class RustVideoBridge {
   _MallocDart? _malloc;
   _FreeDart? _free;
 
-  /// مخزن مؤقت مخصص مسبقاً في الذاكرة الأصلية لنتائج مصفوفة Lumetri (20 عنصر double)
-  ffi.Pointer<ffi.Double>? _lumetriMatrixBuffer;
-
   RustVideoBridge._() {
     _tryLoadNativeAllocator();
     _tryLoadRustLibrary();
@@ -608,7 +589,6 @@ class RustVideoBridge {
       _rustComputeLumetriMatrix != null &&
       _rustMuxFramesToAvi != null;
 
-  /// عدد أنوية المعالج الفعلية لتحديد حجم دفعة الرندر المتوازي (Parallel Batch Size)
   int getHardwareConcurrency() {
     final rustFn = _rustGetHardwareConcurrency;
     if (rustFn != null) {
@@ -617,8 +597,6 @@ class RustVideoBridge {
     return Platform.numberOfProcessors.clamp(2, 8);
   }
 
-  /// تحويل الثواني إلى نبضات صحيحة (Exact Integer Ticks)
-  /// القاعدة العددية الموحدة (VID-010): `round()` لأقرب عدد صحيح مع حماية القيم غير المحدودة.
   int secondsToTicks(double seconds) {
     if (!seconds.isFinite) return 0;
     final rustFn = _rustSecondsToTicks;
@@ -636,9 +614,6 @@ class RustVideoBridge {
     return ticks / ticksPerSecond;
   }
 
-  /// تحويل النبضات الزمنية (Ticks) إلى فهرس إطار عينة صوتية دقيق (VID-010)
-  /// القاعدة العددية الموحدة بين Rust وDart: قسمة صحيحة مقتطعة (`~/`) بحساب `BigInt` (مكافئ `i128` في Rust)
-  /// لمنع أي انحراف ناتج عن تقريب الأعداد العشرية في المدد الطويلة.
   int ticksToAudioSample(int ticks, int sampleRate) {
     if (ticks <= 0 || sampleRate <= 0) return 0;
     final rustFn = _rustTicksToAudioSample;
@@ -650,7 +625,6 @@ class RustVideoBridge {
     return (num ~/ den).toInt();
   }
 
-  /// حساب وقت الإطار بالثواني من رقم الإطار ومعدل الإطارات المستهدف عبر النبضات الزمنية الدقيقة (VID-002 / VID-010)
   double frameIndexToSeconds(int frameIndex, int targetFps) {
     if (frameIndex <= 0 || targetFps <= 0) return 0.0;
     final rustFn = _rustFrameIndexToSeconds;
@@ -669,15 +643,9 @@ class RustVideoBridge {
           : ffi.DynamicLibrary.process();
       _malloc = _stdlib!.lookupFunction<_MallocNative, _MallocDart>('malloc');
       _free = _stdlib!.lookupFunction<_FreeNative, _FreeDart>('free');
-
-      final ptr = _alloc<ffi.Double>(20 * ffi.sizeOf<ffi.Double>());
-      if (ptr != ffi.nullptr) {
-        _lumetriMatrixBuffer = ptr;
-      }
     } catch (_) {
       _malloc = null;
       _free = null;
-      _lumetriMatrixBuffer = null;
     }
   }
 
@@ -781,7 +749,6 @@ class RustVideoBridge {
               );
         } catch (_) {}
 
-        // دوال موسعة اختيارية في حال توفرت في النسخة المترجمة من المكتبة
         try {
           _rustFrameIndexToSeconds = lib
               .lookupFunction<
@@ -828,8 +795,6 @@ class RustVideoBridge {
     }
   }
 
-  /// حل معادلة الزمن x(u) = t لمنحنى Cubic Bezier ثنائي البعد عبر Newton-Raphson + Bisection
-  /// مطابق عددياً 100% لتنفيذ Rust في `rust_solve_cubic_bezier_2d` (VID-010)
   double solveCubicBezier2d(
     double x1,
     double y1,
@@ -864,7 +829,6 @@ class RustVideoBridge {
           3.0 * u * u * (1.0 - c2);
     }
 
-    // 1. 6 تكرارات سريعة بطريقة Newton-Raphson
     double u = clampedT;
     for (int i = 0; i < 6; i++) {
       final err = sampleAxis(cx1, cx2, u) - clampedT;
@@ -874,7 +838,6 @@ class RustVideoBridge {
       u = (u - err / d).clamp(0.0, 1.0);
     }
 
-    // 2. بديل التنصيف المضمون (Bisection) عند المنحنيات الحادة (مطابق لـ Rust VID-010)
     double lo = 0.0;
     double hi = 1.0;
     u = clampedT;
@@ -892,7 +855,6 @@ class RustVideoBridge {
     return sampleAxis(y1, y2, u);
   }
 
-  /// استيفاء منحنى Cubic Bezier عبر دالة Rust `rust_cubic_bezier_eval`
   double evaluateCubicBezier(
     double p0,
     double p1,
@@ -912,7 +874,6 @@ class RustVideoBridge {
         (u * u * u) * p3;
   }
 
-  /// حساب قيم التحويل (Position, Scale, Rotation, Opacity) عند أي لحظة زمنية
   KeyframePoint evaluateKeyframes(
     List<KeyframePoint> keyframes,
     double localTime,
@@ -1060,23 +1021,9 @@ class RustVideoBridge {
     };
   }
 
-  /// توليد مصفوفة تصحيح الألوان 4x5 (20 عنصراً) بأسلوب Lumetri Color في FilmCraft
   List<double> computeLumetriColorMatrix(LumetriColorGrade grade) {
     final rustCompute = _rustComputeLumetriMatrix;
     if (rustCompute != null) {
-      final reusablePtr = _lumetriMatrixBuffer;
-      if (reusablePtr != null && reusablePtr != ffi.nullptr) {
-        rustCompute(
-          grade.exposure,
-          grade.contrast,
-          grade.saturation,
-          grade.temperature,
-          grade.fadedFilm,
-          reusablePtr,
-        );
-        return Float64List.fromList(reusablePtr.asTypedList(20));
-      }
-
       final tempPtr = _alloc<ffi.Double>(20 * ffi.sizeOf<ffi.Double>());
       if (tempPtr != ffi.nullptr) {
         try {
@@ -1140,7 +1087,6 @@ class RustVideoBridge {
     ];
   }
 
-  /// دمج بكسلات إطارين (RGBA8888) في الذاكرة عبر دالة Rust `rust_blend_rgba_frames`
   Uint8List blendRgbaFrames({
     required Uint8List frameA,
     required Uint8List frameB,
@@ -1183,12 +1129,6 @@ class RustVideoBridge {
     return out;
   }
 
-  /// معالجة دفعة إطارات RGBA8888 بتصحيح ألوان Lumetri مع إرجاع حالة صريحة (VID-007)
-  /// تفصل بوضوح بين:
-  /// 1. `notRequired` (عندما تكون إعدادات Lumetri افتراضية `grade.isIdentity`).
-  /// 2. `appliedNative` (تم التطبيق بنجاح في Rust بالتوازي).
-  /// 3. `appliedDartFallback` (تم التطبيق بنجاح في مسار التوافق البرمجي).
-  /// 4. `failed` / `unsupported` (فشل التحقق من المدخلات أو الإعدادات غير المدعومة).
   LumetriBatchResult processRgbaBatchLumetriWithStatus({
     required Uint8List rgbaBatchBytes,
     required int numFrames,
@@ -1226,7 +1166,6 @@ class RustVideoBridge {
       );
     }
 
-    // الحالة 1: التأثير غير مطلوب (Identity)
     if (grade.isIdentity) {
       return LumetriBatchResult(
         status: LumetriProcessStatus.notRequired,
@@ -1234,7 +1173,6 @@ class RustVideoBridge {
       );
     }
 
-    // الحالة 2: محاولة المعالجة الأصلية في Rust
     final rustBatch = _rustProcessRgbaBatchLumetri;
     if (rustBatch != null) {
       final batchPtr = _alloc<ffi.Uint8>(expected);
@@ -1273,7 +1211,6 @@ class RustVideoBridge {
       );
     }
 
-    // مسار المعالجة البرمجية المطابق رياضياً لـ Rust لضمان تطبيق التأثير فعلياً وعدم إرجاع الصورة الأصلية بصمت
     final m = _computeLumetriMatrixDart(grade);
     final vig = grade.vignette.clamp(0.0, 0.85);
     final out = Uint8List.fromList(rgbaBatchBytes.sublist(0, expected));
@@ -1321,8 +1258,6 @@ class RustVideoBridge {
     );
   }
 
-  /// معالجة دفعة كاملة من إطارات RGBA8888 بتصحيح Lumetri
-  /// يرمي `VideoExportException` صريحاً إذا كان التأثير مطلوباً وفشلت المعالجة (VID-007)
   Uint8List processRgbaBatchLumetri({
     required Uint8List rgbaBatchBytes,
     required int numFrames,
@@ -1350,7 +1285,6 @@ class RustVideoBridge {
     );
   }
 
-  /// تحويل دفعة إطارات RGBA8888 بالتوازي إلى فضاء ITU-R BT.709 Studio-Swing NV12 مع فلتر 2x2 Box-Filter (VID-011 / VID-016)
   Uint8List? convertRgbaBatchToBt709Nv12({
     required Uint8List rgbaBatchBytes,
     required int numFrames,
@@ -1392,7 +1326,6 @@ class RustVideoBridge {
       }
     }
 
-    // بديل Dart مطابق رياضياً لمعيار ITU-R BT.709 Studio-Swing مع 2x2 Chroma Box-Filter
     final out = Uint8List(expectedNv12);
     final rgbaFrameSize = width * height * 4;
     final nv12FrameSize = (width * height * 3) ~/ 2;
@@ -1411,7 +1344,6 @@ class RustVideoBridge {
     return out;
   }
 
-  /// تحويل إطار RGBA8888 مفرد إلى فضاء ITU-R BT.709 YUV420 (NV12) (VID-011)
   Uint8List? convertRgbaToNv12({
     required Uint8List rgbaBytes,
     required int width,
@@ -1507,7 +1439,7 @@ class RustVideoBridge {
               240,
             );
         final vVal =
-            (((112 * rAvg - 102 * gAvg - 10 * bAvg + 128) >> 8) + 128).clamp(
+            (((112 * rAvg - 102 * gAvg - 10 * b_avg + 128) >> 8) + 128).clamp(
               16,
               240,
             );
@@ -1519,7 +1451,6 @@ class RustVideoBridge {
     }
   }
 
-  /// محدد ذروة للعينة المفردة بمنحنى ناعم (Soft-Knee Tanh Sample-Peak Limiter) (VID-013)
   static int softKneeSamplePeakLimit(double sample) {
     if (!sample.isFinite) return 0;
     const double kneeStart = 28000.0;
@@ -1532,7 +1463,6 @@ class RustVideoBridge {
     }
     final double sign = sample >= 0.0 ? 1.0 : -1.0;
     final double excess = (absS - kneeStart) / headroom;
-    // tanh(x) = (e^(2x) - 1) / (e^(2x) + 1)
     final double tanhVal = excess > 20.0
         ? 1.0
         : (math.exp(2.0 * excess) - 1.0) / (math.exp(2.0 * excess) + 1.0);
@@ -1540,7 +1470,6 @@ class RustVideoBridge {
     return (sign * compressed).round().clamp(-32767, 32767);
   }
 
-  /// تقدير القمة الحقيقية بين العينات (4x Oversampled Catmull-Rom Inter-Sample Peak) (VID-013)
   double estimateIntersamplePeak4x(
     double s0,
     double s1,
@@ -1557,7 +1486,6 @@ class RustVideoBridge {
     return maxAbs;
   }
 
-  /// محدد القمة الحقيقية بين العينات (4x True-Peak Aware Soft-Knee Limiter) (VID-013)
   int softKneeTruePeakLimit4x(double s0, double s1, double s2, double s3) {
     const double kneeStart = 28000.0;
     final double truePeak = estimateIntersamplePeak4x(s0, s1, s2, s3);
@@ -1570,7 +1498,6 @@ class RustVideoBridge {
     return softKneeSamplePeakLimit(s1);
   }
 
-  /// إعادة أخذ العينات (Linear Resampling) وتحويل القنوات (Mono <-> Stereo) لبيانات PCM16 LE (VID-005)
   Int16List resampleAndConvertPcm16({
     required Uint8List srcPcmBytes,
     required int srcSampleRate,
@@ -1658,8 +1585,6 @@ class RustVideoBridge {
     return resampled;
   }
 
-  /// مزج مؤثر صوتي (Overlay PCM 16-bit LE) فوق المسار الصوتي الرئيسي بدقة الـ Tick
-  /// مع دعم اختلاف معدلات العينات (`overlaySampleRate`) وعدد القنوات (`overlayChannels`) (VID-005)
   Uint8List mixPcm16Overlay({
     required Uint8List masterPcm,
     required Uint8List overlayPcm,
@@ -1681,7 +1606,6 @@ class RustVideoBridge {
       return masterPcm;
     }
 
-    // 1. إذا توفرت دالة Rust الموسعة لإعادة أخذ العينات والمزج
     final rustResampledMix = _rustMixPcm16OverlayResampled;
     if (rustResampledMix != null) {
       final masterPtr = _alloc<ffi.Uint8>(masterPcm.length);
@@ -1716,7 +1640,6 @@ class RustVideoBridge {
       }
     }
 
-    // 2. إذا تطابق المعدل والقنوات وتوفرت دالة Rust الأساسية
     final rustMix = _rustMixPcm16Overlay;
     if (rustMix != null &&
         effOverlayRate == sampleRate &&
@@ -1751,7 +1674,6 @@ class RustVideoBridge {
       }
     }
 
-    // 3. مسار Dart الموحد مع إعادة أخذ العينات وتحويل القنوات ومحدد الذروة الناعم (VID-005 / VID-013)
     final int masterFrameStride = channels * 2;
     final int alignedMasterLen =
         (masterPcm.length ~/ masterFrameStride) * masterFrameStride;
@@ -1791,9 +1713,6 @@ class RustVideoBridge {
     return out;
   }
 
-  /// معالجة عينات الصوت PCM 16-bit LE عبر `rust_process_pcm16_audio` أو مسار Dart المطابق (VID-001 / VID-013)
-  /// يحسب الزمن باستخدام عدد إطارات الصوت المعالجة (`frameIdx / sampleRate`) بحيث تحصل جميع قنوات الإطار الواحد
-  /// (Mono أو Stereo أو متعدد القنوات) على معامل التلاشي نفسه في اللحظة الزمنية نفسها.
   Uint8List processPcm16Audio({
     required Uint8List pcmBytes,
     int sampleRate = 44100,
@@ -1839,7 +1758,6 @@ class RustVideoBridge {
       }
     }
 
-    // مسار Dart المطابق رياضياً لـ Rust (VID-001 / VID-013)
     final out = Uint8List.fromList(pcmBytes);
     final view = ByteData.sublistView(out);
     final double totalSeconds = totalFrames / sampleRate;
@@ -1906,8 +1824,6 @@ class RustVideoBridge {
     return out;
   }
 
-  /// تجميع قائمة إطارات PNG مع الصوت المتداخل (`00dc` + `01wb`) إلى ملف فيديو قياسي (RIFF AVI)
-  /// مع التحقق الصارم من سلامة الذاكرة والأبعاد (VID-003 / VID-004)
   Future<File> muxFramesToVideoContainer({
     required List<Uint8List> frames,
     required String outputPath,
@@ -1937,7 +1853,6 @@ class RustVideoBridge {
       );
     }
 
-    // حساب الحجم الإجمالي والتحقق من صلاحية كل إطار قبل الوصول إلى الذاكرة (VID-004)
     int totalFramesBytes = 0;
     for (int i = 0; i < frames.length; i++) {
       final f = frames[i];
@@ -1950,7 +1865,6 @@ class RustVideoBridge {
       totalFramesBytes += f.length;
     }
 
-    // إذا كان الحجم صغيراً ومناسباً للذاكرة الأصلية (< 128 MB) وتوفرت مكتبة Rust، نستخدم FFI الآمن
     if (totalFramesBytes <= 128 * 1024 * 1024 &&
         frames.length <= maxMuxFrames &&
         (_rustMuxFramesAndPcmToAviChecked != null ||
@@ -1972,7 +1886,6 @@ class RustVideoBridge {
       }
     }
 
-    // المسار التدفقّي المحكوم بالذاكرة مباشرة إلى القرص (Streaming Disk Writer) لمنع استنزاف الذاكرة (VID-003)
     return _writeAviContainerStreamingToDisk(
       frames: frames,
       outputPath: outputPath,
@@ -2129,7 +2042,6 @@ class RustVideoBridge {
     }
   }
 
-  /// كتابة حاوية RIFF/AVI متداخلة (`00dc` + `01wb`) مباشرة إلى القرص بدون تجميع كل الإطارات في مصفوفة واحدة (VID-003)
   Future<File> _writeAviContainerStreamingToDisk({
     required List<Uint8List> frames,
     required String outputPath,
@@ -2161,18 +2073,86 @@ class RustVideoBridge {
     }
   }
 
-  /// فحص وتحليل شرائح إطارات `00dc` داخل بايتات حاوية RIFF/AVI بأمان كامل (VID-009)
-  /// يتحقق من:
-  /// 1. توقيع `RIFF` ونوع النموذج `AVI `.
-  /// 2. حدود الحاوية `riffSize` وعدم القراءة خارج حدود الملف.
-  /// 3. استخراج مقاطع `00dc` الموجودة حصرياً داخل قائمة `LIST("movi")`.
-  /// 4. صحة توقيع PNG (`89 50 4E 47 0D 0A 1A 0A`) لكل إطار مستخرج.
+  /// عد الإطارات الصالحة في ملف AVI عبر فحص الترويسات فقط دون تحميل الصور في الذاكرة (OOM Prevention)
+  Future<int> countValidFramesInAviFile(String aviFilePath) async {
+    final file = File(aviFilePath);
+    if (!file.existsSync()) return 0;
+
+    RandomAccessFile? raf;
+    try {
+      final int fileLen = await file.length();
+      if (fileLen < 32) return 0;
+
+      raf = await file.open(mode: FileMode.read);
+      final header = await raf.read(12);
+      if (header.length < 12 ||
+          header[0] != 0x52 || header[1] != 0x49 || header[2] != 0x46 || header[3] != 0x46 ||
+          header[8] != 0x41 || header[9] != 0x56 || header[10] != 0x49 || header[11] != 0x20) {
+        return 0;
+      }
+
+      final int declaredRiffSize = ByteData.sublistView(header).getUint32(4, Endian.little);
+      final int containerEnd = math.min(fileLen, declaredRiffSize + 8);
+      int validFrames = 0;
+      int pos = 12;
+
+      while (pos + 8 <= containerEnd) {
+        await raf.setPosition(pos);
+        final chunkHdr = await raf.read(8);
+        if (chunkHdr.length < 8) break;
+
+        final int chunkSize = ByteData.sublistView(chunkHdr).getUint32(4, Endian.little);
+        final int dataStart = pos + 8;
+        final int dataEnd = dataStart + chunkSize;
+        if (chunkSize < 0 || dataEnd > containerEnd) break;
+
+        if (chunkHdr[0] == 0x4C && chunkHdr[1] == 0x49 && chunkHdr[2] == 0x53 && chunkHdr[3] == 0x54 && chunkSize >= 4) {
+          final listType = await raf.read(4);
+          if (listType.length == 4 &&
+              listType[0] == 0x6D && listType[1] == 0x6F && listType[2] == 0x76 && listType[3] == 0x69) {
+            int mpos = dataStart + 4;
+            while (mpos + 8 <= dataEnd) {
+              await raf.setPosition(mpos);
+              final mHdr = await raf.read(8);
+              if (mHdr.length < 8) break;
+              final int mSize = ByteData.sublistView(mHdr).getUint32(4, Endian.little);
+              final int mStart = mpos + 8;
+              final int mEnd = mStart + mSize;
+              if (mSize < 0 || mEnd > dataEnd) break;
+
+              if (mHdr[0] == 0x30 && mHdr[1] == 0x30 && mHdr[2] == 0x64 && mHdr[3] == 0x63 && mSize >= 8) {
+                final sigBytes = await raf.read(8);
+                if (_hasValidPngSignature(sigBytes)) {
+                  validFrames++;
+                }
+              }
+
+              final int mPadded = mSize + (mSize.isOdd ? 1 : 0);
+              final int nextMpos = mStart + mPadded;
+              if (nextMpos <= mpos) break;
+              mpos = nextMpos;
+            }
+          }
+        }
+
+        final int padded = chunkSize + (chunkSize.isOdd ? 1 : 0);
+        final int nextPos = dataStart + padded;
+        if (nextPos <= pos) break;
+        pos = nextPos;
+      }
+      return validFrames;
+    } catch (_) {
+      return 0;
+    } finally {
+      try { await raf?.close(); } catch (_) {}
+    }
+  }
+
   List<Uint8List> parseAviFramesFromBytes(
     Uint8List bytes, {
     bool requirePngSignature = true,
   }) {
     if (bytes.length < 32) return const <Uint8List>[];
-    // التحقق من "RIFF" (0x52, 0x49, 0x46, 0x46) و "AVI " (0x41, 0x56, 0x49, 0x20)
     if (bytes[0] != 0x52 ||
         bytes[1] != 0x49 ||
         bytes[2] != 0x46 ||
@@ -2202,17 +2182,15 @@ class RustVideoBridge {
       final int dataEnd = dataStart + chunkSize;
 
       if (chunkSize < 0 || dataEnd > containerEnd) {
-        break; // مقطع مقطوع أو يتجاوز حدود الحاوية
+        break;
       }
 
-      // فحص قوائم LIST ("LIST" = 0x4C, 0x49, 0x53, 0x54)
       if (c0 == 0x4C && c1 == 0x49 && c2 == 0x53 && c3 == 0x54) {
         if (chunkSize >= 4 && dataStart + 4 <= dataEnd) {
           final int l0 = bytes[dataStart];
           final int l1 = bytes[dataStart + 1];
           final int l2 = bytes[dataStart + 2];
           final int l3 = bytes[dataStart + 3];
-          // الدخول فقط في قائمة "movi" (0x6D, 0x6F, 0x76, 0x69) وتجاهل hdrl/strl/INFO
           if (l0 == 0x6D && l1 == 0x6F && l2 == 0x76 && l3 == 0x69) {
             int mpos = dataStart + 4;
             while (mpos + 8 <= dataEnd) {
@@ -2228,7 +2206,6 @@ class RustVideoBridge {
                 break;
               }
 
-              // LIST("rec ") فرعية داخل movi
               if (mc0 == 0x4C &&
                   mc1 == 0x49 &&
                   mc2 == 0x53 &&
@@ -2246,7 +2223,6 @@ class RustVideoBridge {
                   mc2 == 0x64 &&
                   mc3 == 0x63 &&
                   mSize >= 8) {
-                // "00dc" — التحقق من توقيع PNG القياسي
                 bool validFormat = true;
                 if (requirePngSignature) {
                   for (int k = 0; k < 8; k++) {
@@ -2279,7 +2255,6 @@ class RustVideoBridge {
     return frames;
   }
 
-  /// استخراج إطارات PNG من ملف RIFF/AVI المصدّر عبر القراءة المفهرسة الآمنة (VID-003 / VID-009)
   Future<List<Uint8List>> extractFramesFromAvi(String aviFilePath) async {
     final file = File(aviFilePath);
     if (!file.existsSync()) return const <Uint8List>[];
@@ -2398,7 +2373,6 @@ class RustVideoBridge {
     return true;
   }
 
-  /// استعلام قدرات الترميز العتادي للجهاز (H.264 / H.265 HEVC / 1080p60) (VID-017)
   Future<DeviceEncoderCapabilities> queryEncoderCapabilities() async {
     if (Platform.isAndroid) {
       try {
@@ -2420,7 +2394,6 @@ class RustVideoBridge {
     return const DeviceEncoderCapabilities();
   }
 
-  /// اختيار ملف موسيقى أو صوت من الهاتف عبر جسر النظام الأصلي
   Future<({String path, String name})?> pickAudioFileFromDevice() async {
     try {
       final res = await _mediaChannel.invokeMethod<Map<Object?, Object?>>(
@@ -2436,7 +2409,6 @@ class RustVideoBridge {
     return null;
   }
 
-  /// الكشف عن نوع MIME الفعلي لحاوية الفيديو من التوقيع الثنائي للملف (VID-008)
   static Future<String> detectContainerMimeType(File file) async {
     try {
       if (file.existsSync() && file.lengthSync() >= 12) {
@@ -2471,7 +2443,6 @@ class RustVideoBridge {
     return 'video/mp4';
   }
 
-  /// حفظ ملف الفيديو المصدّر في المعرض (`Movies/OurLoveStory`) ومجلد التنزيلات العام (`Download/OurLoveStory`)
   Future<String?> saveVideoToPublicDownloads(
     String sourcePath, {
     String? customFileName,
@@ -2549,7 +2520,6 @@ class RustVideoBridge {
     return null;
   }
 
-  /// مشاركة الفيديو المصدّر أو فتحه بتطبيق خارجي مع تمرير نوع MIME الفعلي للحاوية (VID-008)
   Future<bool> shareExportedVideo(String filePath, {String? title}) async {
     final file = File(filePath);
     if (!file.existsSync()) return false;
@@ -2570,6 +2540,7 @@ class RustVideoBridge {
     String sourcePath, {
     required bool isLocalFile,
     required String tempTag,
+    required List<String> tempFilesToClean,
   }) async {
     try {
       if (isLocalFile) {
@@ -2590,19 +2561,24 @@ class RustVideoBridge {
           ),
           flush: true,
         );
+        tempFilesToClean.add(tempAudio.path);
         return tempAudio.path;
       }
     } catch (_) {}
     return null;
   }
 
-  Future<String?> _prepareAudioFileForExport(VideoProjectEntity project) async {
+  Future<String?> _prepareAudioFileForExport(
+    VideoProjectEntity project,
+    List<String> tempFilesToClean,
+  ) async {
     if (project.customAudioPath != null &&
         project.customAudioPath!.isNotEmpty) {
       return _prepareSingleAudioSource(
         project.customAudioPath!,
         isLocalFile: true,
         tempTag: 'export_bgm_custom',
+        tempFilesToClean: tempFilesToClean,
       );
     }
     if (project.audioAsset != null && project.audioAsset!.isNotEmpty) {
@@ -2610,12 +2586,12 @@ class RustVideoBridge {
         project.audioAsset!,
         isLocalFile: false,
         tempTag: 'export_bgm_asset',
+        tempFilesToClean: tempFilesToClean,
       );
     }
     return null;
   }
 
-  /// التحقق النهائي المستقل من سلامة ملف الفيديو الناتج قبل إعلان النجاح (VID-014 / VID-018)
   Future<void> verifyExportedVideoOutput({
     required File outputFile,
     required VideoExportConfig config,
@@ -2644,8 +2620,8 @@ class RustVideoBridge {
           message: 'نوع الحاوية الناتجة ($actualMime) لا يطابق صيغة AVI المطلوبة.',
         );
       }
-      final frames = await extractFramesFromAvi(outputFile.path);
-      if (frames.isEmpty) {
+      final validFramesCount = await countValidFramesInAviFile(outputFile.path);
+      if (validFramesCount <= 0) {
         throw const VideoExportException(
           stage: VideoExportStage.validating,
           message: 'ملف AVI الناتج لا يحتوي على إطارات فيديو صالحة (00dc).',
@@ -2662,7 +2638,6 @@ class RustVideoBridge {
     }
   }
 
-  /// تصدير مشروع الفيديو كاملاً مع التحقق الصارم من المدخلات والذاكرة والصوت والصيغ (VID-001..VID-018)
   Future<ExportedVideoBundle> exportVideoProject({
     required VideoProjectEntity project,
     required List<Uint8List> renderedFrames,
@@ -2673,7 +2648,6 @@ class RustVideoBridge {
     VideoExportCancelToken? cancelToken,
     void Function(double progress, String status)? onProgress,
   }) async {
-    // 0. التحقق المسبق من صلاحية المشروع والإطارات قبل لمس القرص (VID-012)
     if (project.clips.isEmpty) {
       throw const VideoExportException(
         stage: VideoExportStage.preparing,
@@ -2692,12 +2666,14 @@ class RustVideoBridge {
     final (int targetW, int targetH) = config.resolveDimensions(
       project.numericAspectRatio,
     );
-    final int effectiveFps = config.targetFps.clamp(15, 60);
+    final int resolvedTargetFps =
+        (project.totalDuration > 600.0 && config.targetFps >= 60)
+            ? 30
+            : config.targetFps.clamp(15, 60);
 
-    // استخدام الأبعاد ومعدل الإطارات المستهدفين
     final int activeWidth = width > 0 && width.isEven ? width : targetW;
     final int activeHeight = height > 0 && height.isEven ? height : targetH;
-    final int activeFps = fps > 0 ? fps : effectiveFps;
+    final int activeFps = fps > 0 ? fps : resolvedTargetFps;
 
     final int totalFrames = math.max(
       1,
@@ -2720,7 +2696,10 @@ class RustVideoBridge {
     final List<String> tempFilesToClean = <String>[];
 
     try {
-      final preparedAudioPath = await _prepareAudioFileForExport(project);
+      final preparedAudioPath = await _prepareAudioFileForExport(
+        project,
+        tempFilesToClean,
+      );
       Uint8List? rustProcessedPcm;
       String? processedPcmFilePath;
       int pcmSampleRate = 44100;
@@ -2728,7 +2707,6 @@ class RustVideoBridge {
 
       final durationMs = ((totalFrames / math.max(1, activeFps)) * 1000).round();
 
-      // 1. فك ترميز الموسيقى الخلفية + كافة المؤثرات الصوتية على خط الزمن ومزجها مع توحيد معدلات العينات (VID-001 / VID-005)
       if (Platform.isAndroid &&
           (preparedAudioPath != null || project.soundEffects.isNotEmpty)) {
         onProgress?.call(
@@ -2780,7 +2758,6 @@ class RustVideoBridge {
           }
         }
 
-        // مزج كل مؤثر صوتي مع قراءة معدل عيناته وعدد قنواته الفعليين (VID-005)
         if (rustProcessedPcm != null && project.soundEffects.isNotEmpty) {
           for (int sfxIdx = 0; sfxIdx < project.soundEffects.length; sfxIdx++) {
             cancelToken?.throwIfCancelled(VideoExportStage.processing);
@@ -2789,6 +2766,7 @@ class RustVideoBridge {
               sfx.sourcePath,
               isLocalFile: sfx.isLocalFile,
               tempTag: 'export_sfx_${timestampMs}_$sfxIdx',
+              tempFilesToClean: tempFilesToClean,
             );
             if (sfxFile == null) continue;
 
@@ -2834,85 +2812,129 @@ class RustVideoBridge {
         }
       }
 
-      cancelToken?.throwIfCancelled(VideoExportStage.rendering);
-
-      // 2. فتح كاتب AVI المتدفق إلى القرص ورندر الإطارات بالدفعات المحدودة مع كتابة كل دفعة فوراً
-      // لتحقيق استهلاك ذاكرة مقيد تماماً (Bounded Memory) دون الاحتفاظ بأي إطارات مجمعة في RAM! (VID-003)
-      final writer = await StreamingAviFileWriter.open(
-        outputPath: aviPath,
-        width: activeWidth,
-        height: activeHeight,
-        fps: activeFps,
-        totalExpectedFrames: totalFrames,
-        pcm16Audio: rustProcessedPcm,
-        audioSampleRate: pcmSampleRate,
-        audioChannels: pcmChannels,
-      );
-
+      String finalVideoPath = mp4Path;
       int framesWrittenTotal = 0;
-      try {
-        if (renderedFrames.isNotEmpty) {
-          // مسار التوافق عند تمرير إطارات جاهزة
-          for (int i = 0; i < renderedFrames.length; i++) {
-            cancelToken?.throwIfCancelled(VideoExportStage.rendering);
-            final frame = renderedFrames[i];
-            if (i == 0) {
-              await coverFile.writeAsBytes(frame, flush: true);
-            }
-            await writer.writeFrame(frame);
-            framesWrittenTotal++;
-          }
-        } else {
-          // المسار الافتراضي الاحترافي: رندر متدفق ودفعات متوازية تُسلّم مباشرة لكاتب القرص
+
+      // مسار البث المباشر للـ Encoder بدون ملف AVI وسيط وبدون ضغط PNG على أندرويد لسرعة قصوى
+      if (Platform.isAndroid &&
+          config.format != VideoExportFormat.aviLossless &&
+          renderedFrames.isEmpty) {
+        onProgress?.call(0.12, 'الترميز المباشر: جاري بث البكسلات الخام (RGBA) إلى العتاد...');
+        await _mediaChannel.invokeMethod('startDirectMp4EncodeSession', {
+          'outputMp4Path': mp4Path,
+          'processedPcmPath': processedPcmFilePath,
+          'pcmSampleRate': pcmSampleRate,
+          'pcmChannels': pcmChannels,
+          'fps': activeFps,
+          'width': activeWidth,
+          'height': activeHeight,
+          'codecMime': config.codecMime,
+          'bitrateBps': config.bitrateBps,
+        });
+
+        try {
           await OffscreenVideoCompositor.renderProjectFramesStreamed(
             project: project,
             config: config,
             renderFps: activeFps,
             cancelToken: cancelToken,
+            asRawRgba: true, // بكسلات RGBA خام مباشرة بدون تكلفة ضغط PNG!
             onProgress: (prog, status) {
-              // 0.05 .. 0.82
-              onProgress?.call(0.05 + prog * 0.77, status);
+              onProgress?.call(0.05 + prog * 0.85, status);
             },
-            onBatchReady: (batchStart, batchFrames, w, h, fps) async {
-              cancelToken?.throwIfCancelled(VideoExportStage.rendering);
-              for (int i = 0; i < batchFrames.length; i++) {
-                if (framesWrittenTotal == 0 && i == 0) {
-                  await coverFile.writeAsBytes(batchFrames[0], flush: true);
+            onBatchReady: (batchStart, batchRgbaFrames, w, h, fps) async {
+              cancelToken?.throwIfCancelled(VideoExportStage.encoding);
+              if (framesWrittenTotal == 0 && batchRgbaFrames.isNotEmpty) {
+                final firstPng = await OffscreenVideoCompositor.renderSingleFrameOffscreen(
+                  project: project,
+                  timestampSeconds: 0.0,
+                  width: w,
+                  height: h,
+                  preloadedImages: const {},
+                  colorMatrix: computeLumetriColorMatrix(project.colorGrade),
+                  asRawRgba: false,
+                );
+                if (firstPng.isNotEmpty) {
+                  await coverFile.writeAsBytes(firstPng, flush: true);
                 }
-                await writer.writeFrame(batchFrames[i]);
+              }
+              for (final rgbaFrame in batchRgbaFrames) {
+                await _mediaChannel.invokeMethod('appendRgbaFrameToSession', {
+                  'rgbaBytes': rgbaFrame,
+                  'frameIndex': framesWrittenTotal,
+                });
                 framesWrittenTotal++;
               }
-              // تتحرر مراجع batchFrames فور انتهاء الـ callback ويعاد تدوير الذاكرة بواسطة الـ GC
             },
           );
-        }
-        await writer.finalize();
-      } catch (e) {
-        await writer.abort();
-        rethrow;
-      }
-
-      if (framesWrittenTotal == 0) {
-        throw const VideoExportException(
-          stage: VideoExportStage.rendering,
-          message: 'فشل الرندر الخلفي: لم يتم إنتاج أي إطارات صالحة للتصدير.',
-        );
-      }
-
-      String finalVideoPath = aviPath;
-
-      // 3. إذا اختار المستخدم صيغة MP4 (H.264 أو H.265 HEVC)، نقوم بالترميز الفعلي بدون سقوط صامت إلى AVI (VID-014 / VID-017)
-      if (config.format != VideoExportFormat.aviLossless) {
-        tempFilesToClean.add(aviPath);
-        cancelToken?.throwIfCancelled(VideoExportStage.encoding);
-        onProgress?.call(
-          0.90,
-          'الترميز: جاري ضغط الفيديو (${config.codecLabel} • ${config.resolutionLabel} • ${config.targetFps} FPS)...',
-        );
-
-        String? encodingError;
-        if (Platform.isAndroid) {
+          await _mediaChannel.invokeMethod('finishDirectMp4EncodeSession');
+          finalVideoPath = mp4Path;
+        } catch (e) {
           try {
+            await _mediaChannel.invokeMethod('abortDirectMp4EncodeSession');
+          } catch (_) {}
+          rethrow;
+        }
+      } else {
+        // المسار القياسي عبر ملف AVI (عند اختيار AVI Lossless أو سطح المكتب)
+        cancelToken?.throwIfCancelled(VideoExportStage.rendering);
+        final writer = await StreamingAviFileWriter.open(
+          outputPath: aviPath,
+          width: activeWidth,
+          height: activeHeight,
+          fps: activeFps,
+          totalExpectedFrames: totalFrames,
+          pcm16Audio: rustProcessedPcm,
+          audioSampleRate: pcmSampleRate,
+          audioChannels: pcmChannels,
+        );
+
+        try {
+          if (renderedFrames.isNotEmpty) {
+            for (int i = 0; i < renderedFrames.length; i++) {
+              cancelToken?.throwIfCancelled(VideoExportStage.rendering);
+              final frame = renderedFrames[i];
+              if (i == 0) {
+                await coverFile.writeAsBytes(frame, flush: true);
+              }
+              await writer.writeFrame(frame);
+              framesWrittenTotal++;
+            }
+          } else {
+            await OffscreenVideoCompositor.renderProjectFramesStreamed(
+              project: project,
+              config: config,
+              renderFps: activeFps,
+              cancelToken: cancelToken,
+              asRawRgba: false,
+              onProgress: (prog, status) {
+                onProgress?.call(0.05 + prog * 0.77, status);
+              },
+              onBatchReady: (batchStart, batchFrames, w, h, fps) async {
+                cancelToken?.throwIfCancelled(VideoExportStage.rendering);
+                for (int i = 0; i < batchFrames.length; i++) {
+                  if (framesWrittenTotal == 0 && i == 0) {
+                    await coverFile.writeAsBytes(batchFrames[0], flush: true);
+                  }
+                  await writer.writeFrame(batchFrames[i]);
+                  framesWrittenTotal++;
+                }
+              },
+            );
+          }
+          await writer.finalize();
+        } catch (e) {
+          await writer.abort();
+          rethrow;
+        }
+
+        finalVideoPath = aviPath;
+        if (config.format != VideoExportFormat.aviLossless) {
+          tempFilesToClean.add(aviPath);
+          cancelToken?.throwIfCancelled(VideoExportStage.encoding);
+          onProgress?.call(0.90, 'الترميز: جاري ضغط الفيديو...');
+
+          if (Platform.isAndroid) {
             final nativeMp4 = await _mediaChannel.invokeMethod<String>(
               'muxToMp4WithAudio',
               {
@@ -2927,7 +2949,7 @@ class RustVideoBridge {
                 'audioFadeIn': project.audioFadeIn,
                 'audioFadeOut': project.audioFadeOut,
                 'fps': activeFps,
-                'targetFps': config.targetFps,
+                'targetFps': activeFps,
                 'width': activeWidth,
                 'height': activeHeight,
                 'codecMime': config.codecMime,
@@ -2936,84 +2958,23 @@ class RustVideoBridge {
                 'useGpuSurface': true,
               },
             );
-            if (nativeMp4 != null &&
-                nativeMp4.isNotEmpty &&
-                File(nativeMp4).existsSync() &&
-                File(nativeMp4).lengthSync() > 0) {
+            if (nativeMp4 != null && File(nativeMp4).existsSync()) {
               finalVideoPath = nativeMp4;
             }
-          } catch (e) {
-            encodingError = e.toString();
           }
-        }
-
-        // على أنظمة سطح المكتب والاختبار: استخدام FFmpeg
-        if (finalVideoPath == aviPath && !Platform.isAndroid) {
-          try {
-            final ffmpegCodec = config.format == VideoExportFormat.mp4Hevc
-                ? 'libx265'
-                : 'libx264';
-            final ffmpegArgs = <String>['-y', '-i', aviPath];
-            if (rustProcessedPcm == null &&
-                preparedAudioPath != null &&
-                File(preparedAudioPath).existsSync()) {
-              if (project.audioStartOffset > 0) {
-                ffmpegArgs.addAll([
-                  '-ss',
-                  project.audioStartOffset.toStringAsFixed(2),
-                ]);
-              }
-              ffmpegArgs.addAll(['-i', preparedAudioPath]);
-            }
-            ffmpegArgs.addAll([
-              '-c:v',
-              ffmpegCodec,
-              '-pix_fmt',
-              'yuv420p',
-              '-vf',
-              'scale=$activeWidth:$activeHeight:flags=lanczos,fps=${config.targetFps}',
-              '-r',
-              '${config.targetFps}',
-              '-b:v',
-              '${config.bitrateMbps}M',
-            ]);
-            if (rustProcessedPcm != null ||
-                (preparedAudioPath != null &&
-                    File(preparedAudioPath).existsSync())) {
-              ffmpegArgs.addAll(['-c:a', 'aac', '-b:a', '128k', '-shortest']);
-            }
-            ffmpegArgs.add(mp4Path);
-
-            final res = await Process.run('ffmpeg', ffmpegArgs);
-            if (res.exitCode == 0 &&
-                File(mp4Path).existsSync() &&
-                File(mp4Path).lengthSync() > 0) {
-              finalVideoPath = mp4Path;
-            } else {
-              encodingError =
-                  'FFmpeg exited with code ${res.exitCode}: ${res.stderr}';
-            }
-          } catch (e) {
-            encodingError = e.toString();
-          }
-        }
-
-        if (finalVideoPath != mp4Path) {
-          throw VideoExportException(
-            stage: VideoExportStage.encoding,
-            message:
-                'فشل ترميز الفيديو بصيغة ${config.codecLabel} (${config.resolutionLabel} @ ${config.targetFps} FPS). ${encodingError ?? ""}',
-          );
         }
       }
 
-      cancelToken?.throwIfCancelled(VideoExportStage.validating);
-      onProgress?.call(
-        0.96,
-        'التحقق النهائي: جاري فحص سلامة الحاوية والمسارات...',
-      );
+      if (framesWrittenTotal == 0) {
+        throw const VideoExportException(
+          stage: VideoExportStage.rendering,
+          message: 'فشل الرندر الخلفي: لم يتم إنتاج أي إطارات صالحة للتصدير.',
+        );
+      }
 
-      // 4. التحقق المستقل النهائي قبل إعلان النجاح (VID-014 / VID-018)
+      cancelToken?.throwIfCancelled(VideoExportStage.validating);
+      onProgress?.call(0.96, 'التحقق النهائي: جاري فحص سلامة الحاوية والمسارات...');
+
       await verifyExportedVideoOutput(
         outputFile: File(finalVideoPath),
         config: config,
@@ -3039,7 +3000,7 @@ class RustVideoBridge {
         ..['exportedVideoPath'] = finalVideoPath
         ..['publicVideoPath'] = publicPath ?? finalVideoPath
         ..['coverImagePath'] = coverFile.path
-        ..['renderedFramesCount'] = validInputFrames.length
+        ..['renderedFramesCount'] = framesWrittenTotal
         ..['exportedFps'] = exportedFps
         ..['exportFormat'] = config.format.name
         ..['exportWidth'] = activeWidth
@@ -3063,13 +3024,12 @@ class RustVideoBridge {
         projectJsonPath: projectJsonFile.path,
         videoFilePath: finalVideoPath,
         publicVideoPath: publicPath ?? finalVideoPath,
-        renderedFramesCount: validInputFrames.length,
+        renderedFramesCount: framesWrittenTotal,
         fps: exportedFps,
         fileSizeBytes: fileBytes,
         exportedAt: DateTime.now(),
       );
     } catch (e) {
-      // تنظيف الملفات غير المكتملة عند الفشل أو الإلغاء (VID-003 / VID-014)
       for (final p in <String>[coverFile.path, aviPath, mp4Path]) {
         try {
           if (File(p).existsSync()) {
@@ -3094,7 +3054,6 @@ class RustVideoBridge {
     }
   }
 
-  /// جلب قائمة جميع الفيديوهات المصدّرة لعرضها وإدارتها داخل الاستوديو
   Future<List<ExportedVideoBundle>> listExportedVideoBundles() async {
     try {
       final appDir = await getApplicationDocumentsDirectory();
@@ -3159,7 +3118,6 @@ class RustVideoBridge {
     }
   }
 
-  /// حذف فيديو مصدّر مع كافة ملفاته المرتبطة
   Future<void> deleteExportedBundle(ExportedVideoBundle bundle) async {
     final paths = <String>{
       bundle.videoFilePath,
@@ -3179,7 +3137,6 @@ class RustVideoBridge {
   }
 }
 
-/// كاتب حاوية RIFF/AVI متدفق إلى القرص (Streaming Disk Writer) لمنع الاحتفاظ بكل الإطارات في الذاكرة (VID-003)
 class StreamingAviFileWriter {
   final String outputPath;
   final int width;
@@ -3195,7 +3152,7 @@ class StreamingAviFileWriter {
   int _framesWritten = 0;
   int _audFrameCursor = 0;
   int _totalAudioBytesWritten = 0;
-  int _moviPayloadBytes = 4; // "movi"
+  int _moviPayloadBytes = 4;
   int _currentChunkOffset = 4;
   late final int _riffSizePos;
   late final int _numFramesPos1;
@@ -3286,7 +3243,7 @@ class StreamingAviFileWriter {
 
     await _writeFourCC('RIFF');
     _riffSizePos = await _raf.position();
-    await _writeU32(0); // يُحدّث عند الإغلاق
+    await _writeU32(0);
     await _writeFourCC('AVI ');
 
     await _writeFourCC('LIST');
@@ -3308,7 +3265,6 @@ class StreamingAviFileWriter {
     await _writeU32(height);
     await _raf.writeFrom(Uint8List(16));
 
-    // Stream 0: Video (MPNG)
     await _writeFourCC('LIST');
     await _writeU32(116);
     await _writeFourCC('strl');
@@ -3345,7 +3301,6 @@ class StreamingAviFileWriter {
     await _writeU32(frameBufferSize);
     await _raf.writeFrom(Uint8List(16));
 
-    // Stream 1: Audio (PCM 16-bit LE)
     if (hasAudio) {
       final int blockAlign = _audioChannels * 2;
       final int avgBytesPerSec = _audioSampleRate * blockAlign;
@@ -3385,7 +3340,7 @@ class StreamingAviFileWriter {
 
     await _writeFourCC('LIST');
     _moviSizePos = await _raf.position();
-    await _writeU32(0); // يُحدّث عند الإغلاق
+    await _writeU32(0);
     await _writeFourCC('movi');
   }
 
@@ -3543,20 +3498,18 @@ class ExportedVideoBundle {
       publicVideoPath.contains('/Movies/');
 }
 
-/// صيغ وكودك تصدير الفيديو المدعومة
 enum VideoExportFormat {
   mp4H264,
   mp4Hevc,
   aviLossless,
 }
 
-/// إعدادات الرندر والتصدير الاحترافية (الصيغة، الكودك، الدقة 1080p/720p، معدل الإطارات 30/60 FPS، معدل البت، وحجم الدفعة المتوازية)
 class VideoExportConfig {
   final VideoExportFormat format;
-  final int resolutionShortSide; // 1080 (Full HD) or 720 (HD)
-  final int targetFps;           // 30 or 60 FPS
-  final int bitrateMbps;         // 6..16 Mbps (supports 14 Mbps Full HD)
-  final int parallelBatchSize;   // 4..8 frames rendered concurrently
+  final int resolutionShortSide;
+  final int targetFps;
+  final int bitrateMbps;
+  final int parallelBatchSize;
 
   const VideoExportConfig({
     this.format = VideoExportFormat.mp4H264,
@@ -3587,7 +3540,6 @@ class VideoExportConfig {
 
   int get bitrateBps => bitrateMbps.clamp(2, 24) * 1000000;
 
-  /// حساب أبعاد الرندر الخلفي الحقيقية (Offscreen True Resolution) بناءً على نسبة العرض إلى الارتفاع للمشروع
   (int, int) resolveDimensions(double aspectRatio) {
     final isFullHd = resolutionShortSide >= 1080;
     if (aspectRatio < 0.8) {
