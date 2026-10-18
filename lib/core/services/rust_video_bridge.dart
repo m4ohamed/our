@@ -1,4 +1,3 @@
-```dart
 // lib/core/services/rust_video_bridge.dart
 import 'dart:async';
 import 'dart:convert';
