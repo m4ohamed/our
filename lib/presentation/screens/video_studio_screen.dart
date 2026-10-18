@@ -63,7 +63,11 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
   // 0: المقاطع, 1: Keyframes ◆, 2: النصوص, 3: 🎨 Lumetri, 4: الانتقالات, 5: 🎵 الصوت
   int _activeToolTab = 0;
 
-  double _playheadTime = 0.0;
+  late final ValueNotifier<double> _playheadNotifier = ValueNotifier<double>(0.0);
+  double get _playheadTime => _playheadNotifier.value;
+  set _playheadTime(double v) => _playheadNotifier.value = v;
+  final Stopwatch _playbackStopwatch = Stopwatch();
+  double _playbackStartTime = 0.0;
   bool _isPlaying = false;
   bool _isExporting = false;
   double _exportProgress = 0.0;
@@ -448,6 +452,9 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
       _playheadTime = 0.0;
     }
 
+    _playbackStartTime = _playheadTime;
+    _playbackStopwatch.reset();
+    _playbackStopwatch.start();
     _triggeredSfxInCurrentPlay.clear();
     setState(() => _isPlaying = true);
     _startStudioAudioAtPlayhead();
@@ -459,27 +466,32 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         t.cancel();
         return;
       }
-      setState(() {
-        _playheadTime += tickMs / 1000.0;
-        if (_project.hasBackgroundAudio) {
-          _studioBgmPlayer.setVolume(_computeInstantAudioVolume(_playheadTime));
-        }
-        _checkAndTriggerSoundEffects(_playheadTime);
+      final double elapsed = _playbackStopwatch.elapsedMicroseconds / 1000000.0;
+      final double nextTime = _playbackStartTime + elapsed;
+      if (nextTime >= _project.totalDuration) {
+        _playheadTime = 0.0;
+        _isPlaying = false;
+        _studioBgmPlayer.stop();
+        _studioSfxPlayer.stop();
+        _playbackStopwatch.stop();
+        t.cancel();
+        if (mounted) setState(() {});
+        return;
+      }
 
-        if (_playheadTime >= _project.totalDuration) {
-          _playheadTime = 0.0;
-          _isPlaying = false;
-          _studioBgmPlayer.stop();
-          _studioSfxPlayer.stop();
-          t.cancel();
-        }
-        _syncSelectedClipWithPlayhead();
-      });
+      // تحديث مؤشر الوقت الموضعي المعزول دون إعادة بناء الشاشة بالكامل (VID-015 / Refactoring)
+      _playheadTime = nextTime;
+      if (_project.hasBackgroundAudio) {
+        _studioBgmPlayer.setVolume(_computeInstantAudioVolume(nextTime));
+      }
+      _checkAndTriggerSoundEffects(nextTime);
+      _syncSelectedClipWithPlayhead();
     });
   }
 
   void _pausePlayback() {
     _playbackTimer?.cancel();
+    _playbackStopwatch.stop();
     _studioBgmPlayer.pause();
     _studioSfxPlayer.stop();
     for (final ctrl in _videoControllers.values) {
@@ -1441,38 +1453,11 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         });
       }
 
-      // 1. رندر الإطارات في الخلفية عبر محرك OffscreenVideoCompositor المستقل عن حجم شاشة المعاينة (VID-015 / VID-016)
-      final List<Uint8List> validFrames =
-          await OffscreenVideoCompositor.renderProjectFramesParallel(
-            project: _project,
-            config: chosenConfig,
-            renderFps: renderFps,
-            cancelToken: cancelToken,
-            onProgress: (prog, status) {
-              if (!mounted) return;
-              setState(() {
-                _exportStage = VideoExportStage.rendering;
-                _exportProgress = prog.clamp(0.0, 0.78);
-                _exportedFramesDone =
-                    ((prog / 0.75).clamp(0.0, 1.0) * totalFrames).round();
-                _exportStatusText = status;
-              });
-            },
-          );
-
-      cancelToken.throwIfCancelled(VideoExportStage.processing);
-
-      if (validFrames.isEmpty) {
-        throw const VideoExportException(
-          stage: VideoExportStage.rendering,
-          message: 'لم يتم إنتاج أي إطارات صالحة أثناء الرندر الخلفي.',
-        );
-      }
-
-      // 2. تمرير الإطارات عالية الدقة إلى محرك Rust + MediaCodec/FFmpeg مع التحقق المستقل (VID-014 / VID-018)
+      // 1. تشغيل مسار التصدير المتدفق المباشر للقرص (True Streaming Export)
+      // بدون جمع كل إطارات الـ PNG في قائمة واحدة في الذاكرة! (VID-003 / VID-015 / VID-016)
       final bundle = await RustVideoBridge.instance.exportVideoProject(
         project: _project,
-        renderedFrames: validFrames,
+        renderedFrames: const <Uint8List>[], // رندر وتدفق متوازي مباشرة إلى القرص
         width: frameWidth,
         height: frameHeight,
         fps: renderFps,
@@ -2262,7 +2247,12 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                         onScaleUpdate: (d) => _onStageScaleUpdate(d, stageSize),
                         child: RepaintBoundary(
                           key: _stageBoundaryKey,
-                          child: _buildStageCanvas(theme),
+                          child: ValueListenableBuilder<double>(
+                            valueListenable: _playheadNotifier,
+                            builder: (context, playhead, _) {
+                              return _buildStageCanvas(theme, playhead);
+                            },
+                          ),
                         ),
                       );
                     },
@@ -2273,7 +2263,12 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
           ),
 
           // 2. Playback & Timeline Scrubber Bar with Keyframe CRUD (◀ ◆+ 🗑️ ▶)
-          _buildTimelineScrubber(theme),
+          ValueListenableBuilder<double>(
+            valueListenable: _playheadNotifier,
+            builder: (context, playhead, _) {
+              return _buildTimelineScrubber(theme, playhead);
+            },
+          ),
 
           // 3. Studio Tool Tabs (6 Tabs including dedicated Audio & Music Tab)
           _buildToolSelectorBar(theme),
@@ -2287,7 +2282,8 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
 
   // ─── Stage Renderer (Clips + Lumetri Color Matrix + Vignette + Text) ───────
 
-  Widget _buildStageCanvas(ThemeData theme) {
+  Widget _buildStageCanvas(ThemeData theme, [double? externalPlayhead]) {
+    final double activePlayhead = externalPlayhead ?? _playheadTime;
     if (_project.clips.isEmpty) {
       return Container(
         decoration: BoxDecoration(
@@ -2309,7 +2305,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     double clipStart = 0.0;
     for (int i = 0; i < _project.clips.length; i++) {
       final d = _project.clips[i].durationSeconds;
-      if (_playheadTime <= clipStart + d || i == _project.clips.length - 1) {
+      if (activePlayhead <= clipStart + d || i == _project.clips.length - 1) {
         activeIdx = i;
         break;
       }
@@ -2317,7 +2313,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     }
 
     final currentClip = _project.clips[activeIdx];
-    final localTime = (_playheadTime - clipStart).clamp(
+    final localTime = (activePlayhead - clipStart).clamp(
       0.0,
       currentClip.durationSeconds,
     );
@@ -2400,9 +2396,9 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
               ),
 
             for (final txt in _project.textTracks)
-              if (_playheadTime >= txt.startTime &&
-                  _playheadTime <= txt.endTime)
-                _buildAnimatedTextOverlay(txt, _playheadTime - txt.startTime),
+              if (activePlayhead >= txt.startTime &&
+                  activePlayhead <= txt.endTime)
+                _buildAnimatedTextOverlay(txt, activePlayhead - txt.startTime),
 
             if (!_isExporting)
               Positioned(
@@ -2424,7 +2420,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        '${_playheadTime.toStringAsFixed(1)}s / ${_project.totalDuration.toStringAsFixed(1)}s • اسحب للتحريك ◆',
+                        '${activePlayhead.toStringAsFixed(1)}s / ${_project.totalDuration.toStringAsFixed(1)}s • اسحب للتحريك ◆',
                         style: GoogleFonts.manrope(
                           color: Theme.of(context).colorScheme.onPrimary,
                           fontSize: 10,
@@ -2664,7 +2660,8 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
 
   // ─── Timeline Scrubber + Pro Keyframe Bar (◀ ◆+ 🗑️ ▶) ─────────────────────
 
-  Widget _buildTimelineScrubber(ThemeData theme) {
+  Widget _buildTimelineScrubber(ThemeData theme, [double? externalPlayhead]) {
+    final double activePlayhead = externalPlayhead ?? _playheadTime;
     final total = math.max(_project.totalDuration, 0.1);
     final bool editingText =
         _editTextKeyframes && _project.textTracks.isNotEmpty;
@@ -2695,7 +2692,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
               ),
               Expanded(
                 child: Slider(
-                  value: _playheadTime.clamp(0.0, total),
+                  value: activePlayhead.clamp(0.0, total),
                   min: 0.0,
                   max: total,
                   onChanged: _isExporting
@@ -2703,7 +2700,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                       : (v) {
                           _pausePlayback();
                           setState(() {
-                            _playheadTime = v;
+                            activePlayhead = v;
                             _syncSelectedClipWithPlayhead();
                           });
                         },
@@ -2851,7 +2848,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                           _pausePlayback();
                           setState(() {
                             _selectedKeyframeIndex = i;
-                            _playheadTime = (baseStartTime + kf.timestamp)
+                            activePlayhead = (baseStartTime + kf.timestamp)
                                 .clamp(0.0, total);
                           });
                         },
