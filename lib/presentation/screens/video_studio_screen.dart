@@ -214,10 +214,55 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     return _clipStartTime(_selectedClipIndex);
   }
 
+  /// إدارة مشغلات الفيديو الكسولة (Lazy / Virtualized Controller Pool) لمنع استنزاف مفكوكات العتاد (Item 2)
+  /// تحتفظ بحد أقصى بمشغل المقطع النشط والمقطع التالي فقط، وتحرر المقاطع البعيدة فوراً
   Future<void> _initVideoControllers() async {
-    for (final clip in _project.clips) {
-      if (clip.sourceType == VideoClipSourceType.video &&
-          !_videoControllers.containsKey(clip.id)) {
+    await _syncVirtualizedVideoControllers();
+  }
+
+  Future<void> _syncVirtualizedVideoControllers() async {
+    if (_project.clips.isEmpty) return;
+
+    // تحديد المقطع النشط والمقطع التالي بناءً على المؤشر الزمني
+    int activeIdx = 0;
+    double clipStart = 0.0;
+    for (int i = 0; i < _project.clips.length; i++) {
+      final d = _project.clips[i].durationSeconds;
+      if (_playheadTime <= clipStart + d || i == _project.clips.length - 1) {
+        activeIdx = i;
+        break;
+      }
+      clipStart += d;
+    }
+
+    final neededClipIds = <String>{};
+    if (_project.clips[activeIdx].sourceType == VideoClipSourceType.video) {
+      neededClipIds.add(_project.clips[activeIdx].id);
+    }
+    if (activeIdx + 1 < _project.clips.length &&
+        _project.clips[activeIdx + 1].sourceType == VideoClipSourceType.video) {
+      neededClipIds.add(_project.clips[activeIdx + 1].id);
+    }
+
+    // 1. التخلص من المشغلات للمقاطع البعيدة عن المؤشر لتحرير قنوات الـ Hardware Decoders
+    final toRemove = <String>[];
+    for (final entry in _videoControllers.entries) {
+      if (!neededClipIds.contains(entry.key)) {
+        toRemove.add(entry.key);
+      }
+    }
+    for (final id in toRemove) {
+      try {
+        final ctrl = _videoControllers.remove(id);
+        ctrl?.pause();
+        ctrl?.dispose();
+      } catch (_) {}
+    }
+
+    // 2. تهيئة المشغلات المطلوبة للمقطع الحالي والتالي فقط
+    for (final id in neededClipIds) {
+      if (!_videoControllers.containsKey(id)) {
+        final clip = _project.clips.firstWhere((c) => c.id == id);
         VideoPlayerController? ctrl;
         if (clip.localPath != null && File(clip.localPath!).existsSync()) {
           ctrl = VideoPlayerController.file(File(clip.localPath!));
@@ -544,6 +589,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
           if (!_editTextKeyframes) {
             _selectedKeyframeIndex = 0;
           }
+          _syncVirtualizedVideoControllers();
         }
         final vCtrl = _videoControllers[clip.id];
         if (vCtrl != null && vCtrl.value.isInitialized) {
