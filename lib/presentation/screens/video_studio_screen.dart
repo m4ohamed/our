@@ -101,6 +101,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
   void dispose() {
     _exportCancelToken?.cancel();
     _playbackTimer?.cancel();
+    _playheadNotifier.dispose();
     _studioBgmPlayer.dispose();
     _studioSfxPlayer.dispose();
     _previewAudioPlayer.dispose();
@@ -132,6 +133,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
       _project = _undoStack.removeLast();
       _clampSelectionIndices();
     });
+    _syncVirtualizedVideoControllers();
   }
 
   void _redo() {
@@ -141,6 +143,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
       _project = _redoStack.removeLast();
       _clampSelectionIndices();
     });
+    _syncVirtualizedVideoControllers();
   }
 
   void _clampSelectionIndices() {
@@ -594,7 +597,20 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         final vCtrl = _videoControllers[clip.id];
         if (vCtrl != null && vCtrl.value.isInitialized) {
           final targetMs = ((_playheadTime - acc) * 1000).round();
-          vCtrl.seekTo(Duration(milliseconds: targetMs));
+          if (_isPlaying) {
+            if (!vCtrl.value.isPlaying) {
+              vCtrl.play();
+            }
+            final currentMs = vCtrl.value.position.inMilliseconds;
+            if ((currentMs - targetMs).abs() > 250) {
+              vCtrl.seekTo(Duration(milliseconds: targetMs));
+            }
+          } else {
+            if (vCtrl.value.isPlaying) {
+              vCtrl.pause();
+            }
+            vCtrl.seekTo(Duration(milliseconds: targetMs));
+          }
         }
         break;
       }
@@ -1441,6 +1457,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     updated.insert(target, item);
     _selectedClipIndex = target;
     _commitProjectChange(_project.copyWith(clips: updated));
+    _syncVirtualizedVideoControllers();
   }
 
   // ─── Offscreen True-Resolution Parallel Batch Video Rendering & Export Pipeline ─
@@ -2296,7 +2313,11 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                           child: ValueListenableBuilder<double>(
                             valueListenable: _playheadNotifier,
                             builder: (context, playhead, _) {
-                              return _buildStageCanvas(theme, playhead);
+                              return _buildStageCanvas(
+                                theme,
+                                playhead,
+                                stageSize,
+                              );
                             },
                           ),
                         ),
@@ -2328,8 +2349,16 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
 
   // ─── Stage Renderer (Clips + Lumetri Color Matrix + Vignette + Text) ───────
 
-  Widget _buildStageCanvas(ThemeData theme, [double? externalPlayhead]) {
+  Widget _buildStageCanvas(
+    ThemeData theme, [
+    double? externalPlayhead,
+    Size? stageSize,
+  ]) {
     final double activePlayhead = externalPlayhead ?? _playheadTime;
+    final double scaleFactor =
+        (stageSize != null && stageSize.shortestSide > 0)
+            ? (stageSize.shortestSide / 360.0)
+            : 1.0;
     if (_project.clips.isEmpty) {
       return Container(
         decoration: BoxDecoration(
@@ -2408,6 +2437,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                           prevClip.keyframes,
                           prevClip.durationSeconds,
                         ),
+                        scaleFactor: scaleFactor,
                       ),
                     ),
                   _buildTransitionWrappedClip(
@@ -2417,6 +2447,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                         ? currentClip.transition
                         : VideoTransitionType.none,
                     progress: transProgress,
+                    scaleFactor: scaleFactor,
                   ),
                 ],
               ),
@@ -2428,7 +2459,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                   decoration: BoxDecoration(
                     gradient: RadialGradient(
                       center: Alignment.center,
-                      radius: 0.9,
+                      radius: 0.7071,
                       colors: [
                         AppTheme.transparent(context),
                         Theme.of(
@@ -2444,7 +2475,11 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
             for (final txt in _project.textTracks)
               if (activePlayhead >= txt.startTime &&
                   activePlayhead <= txt.endTime)
-                _buildAnimatedTextOverlay(txt, activePlayhead - txt.startTime),
+                _buildAnimatedTextOverlay(
+                  txt,
+                  activePlayhead - txt.startTime,
+                  scaleFactor: scaleFactor,
+                ),
 
             if (!_isExporting)
               Positioned(
@@ -2520,8 +2555,13 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     required KeyframePoint kf,
     required VideoTransitionType transition,
     required double progress,
+    double scaleFactor = 1.0,
   }) {
-    Widget child = _buildRenderedClipLayer(clip, kf);
+    Widget child = _buildRenderedClipLayer(
+      clip,
+      kf,
+      scaleFactor: scaleFactor,
+    );
 
     switch (transition) {
       case VideoTransitionType.none:
@@ -2545,18 +2585,26 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
           child: Transform.scale(scale: pulse, child: child),
         );
       case VideoTransitionType.dreamyBlur:
-        final sigma = (1.0 - progress) * 14.0;
+        final sigma = (1.0 - progress) * 14.0 * scaleFactor;
         return Opacity(
           opacity: progress.clamp(0.0, 1.0),
           child: ImageFiltered(
-            imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+            imageFilter: ui.ImageFilter.blur(
+              sigmaX: sigma,
+              sigmaY: sigma,
+              tileMode: TileMode.clamp,
+            ),
             child: child,
           ),
         );
     }
   }
 
-  Widget _buildRenderedClipLayer(VideoClipItem clip, KeyframePoint kf) {
+  Widget _buildRenderedClipLayer(
+    VideoClipItem clip,
+    KeyframePoint kf, {
+    double scaleFactor = 1.0,
+  }) {
     Widget mediaContent;
     final hasLocal =
         clip.localPath != null && File(clip.localPath!).existsSync();
@@ -2587,26 +2635,17 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
         ),
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.favorite_rounded,
-                  color: Theme.of(context).colorScheme.onPrimary,
-                  size: 54,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  clip.title,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.notoSerif(
-                    color: Theme.of(context).colorScheme.onPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+            padding: EdgeInsets.all(24.0 * scaleFactor),
+            child: Text(
+              '❤️\n${clip.title}',
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+              style: GoogleFonts.notoSerif(
+                color: Theme.of(context).colorScheme.onPrimary,
+                fontSize: 24.0 * scaleFactor,
+                fontWeight: FontWeight.bold,
+                height: 1.4,
+              ),
             ),
           ),
         ),
@@ -2641,25 +2680,30 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     );
   }
 
-  Widget _buildAnimatedTextOverlay(VideoTextTrack track, double localTime) {
+  Widget _buildAnimatedTextOverlay(
+    VideoTextTrack track,
+    double localTime, {
+    double scaleFactor = 1.0,
+  }) {
     final kf = RustVideoBridge.instance.evaluateKeyframes(
       track.keyframes,
       localTime,
     );
 
+    final double scaledFontSize = track.fontSize * scaleFactor;
     final TextStyle font = switch (track.fontStyle) {
       'script' => GoogleFonts.dancingScript(
-        fontSize: track.fontSize,
+        fontSize: scaledFontSize,
         color: AppTheme.fromCode(track.colorValue),
         fontWeight: FontWeight.bold,
       ),
       'sans' => GoogleFonts.manrope(
-        fontSize: track.fontSize,
+        fontSize: scaledFontSize,
         color: AppTheme.fromCode(track.colorValue),
         fontWeight: FontWeight.bold,
       ),
       _ => GoogleFonts.notoSerif(
-        fontSize: track.fontSize,
+        fontSize: scaledFontSize,
         color: AppTheme.fromCode(track.colorValue),
         fontWeight: FontWeight.bold,
       ),
@@ -2675,25 +2719,27 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
             scale: kf.scale,
             child: Center(
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
+                margin: EdgeInsets.symmetric(horizontal: 20.0 * scaleFactor),
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16.0 * scaleFactor,
+                  vertical: 10.0 * scaleFactor,
                 ),
                 decoration: BoxDecoration(
                   color: Theme.of(
                     context,
                   ).colorScheme.scrim.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(16.0 * scaleFactor),
                   border: Border.all(
                     color: Theme.of(
                       context,
                     ).colorScheme.onPrimary.withValues(alpha: 0.25),
+                    width: 1.2 * scaleFactor,
                   ),
                 ),
                 child: Text(
                   track.text,
                   textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
                   style: font,
                 ),
               ),
@@ -2746,7 +2792,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                       : (v) {
                           _pausePlayback();
                           setState(() {
-                            activePlayhead = v;
+                            _playheadTime = v;
                             _syncSelectedClipWithPlayhead();
                           });
                         },
@@ -2894,7 +2940,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                           _pausePlayback();
                           setState(() {
                             _selectedKeyframeIndex = i;
-                            activePlayhead = (baseStartTime + kf.timestamp)
+                            _playheadTime = (baseStartTime + kf.timestamp)
                                 .clamp(0.0, total);
                           });
                         },
@@ -3141,6 +3187,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
                         _selectedClipIndex = 0;
                         _playheadTime = 0.0;
                         _commitProjectChange(_project.copyWith(clips: updated));
+                        _syncVirtualizedVideoControllers();
                       },
                     ),
                 ],
@@ -3589,6 +3636,7 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
     required double min,
     required double max,
     required ValueChanged<double> onChanged,
+    ValueChanged<double>? onChangeStart,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3597,7 +3645,13 @@ class _VideoStudioScreenState extends ConsumerState<VideoStudioScreen> {
           label,
           style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w600),
         ),
-        Slider(value: value, min: min, max: max, onChanged: onChanged),
+        Slider(
+          value: value.clamp(min, max),
+          min: min,
+          max: max,
+          onChangeStart: onChangeStart ?? (_) => _pushUndoSnapshot(),
+          onChanged: onChanged,
+        ),
       ],
     );
   }
@@ -4858,6 +4912,7 @@ class _ExportedVideoPlayerDialog extends StatefulWidget {
 class _ExportedVideoPlayerDialogState
     extends State<_ExportedVideoPlayerDialog> {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  VideoPlayerController? _mp4Controller;
   List<Uint8List> _frames = [];
   VideoProjectEntity? _project;
   bool _loading = true;
@@ -4874,8 +4929,20 @@ class _ExportedVideoPlayerDialogState
   @override
   void dispose() {
     _timer?.cancel();
+    _mp4Controller?.removeListener(_onMp4ControllerTick);
+    _mp4Controller?.dispose();
     _audioPlayer.dispose();
     super.dispose();
+  }
+
+  void _onMp4ControllerTick() {
+    if (!mounted || _mp4Controller == null) return;
+    final val = _mp4Controller!.value;
+    if (val.isPlaying != _playing) {
+      setState(() => _playing = val.isPlaying);
+    } else {
+      setState(() {});
+    }
   }
 
   Future<void> _initPlayer() async {
@@ -4886,7 +4953,31 @@ class _ExportedVideoPlayerDialogState
           jsonDecode(raw) as Map<String, dynamic>,
         );
       }
-      final aviCandidate = widget.bundle.videoFilePath.toLowerCase().endsWith('.avi')
+
+      final videoFile = File(widget.bundle.videoFilePath);
+      final isMp4 = widget.bundle.videoFilePath.toLowerCase().endsWith('.mp4');
+
+      // 1. إذا كان الملف MP4، نشغله مباشرة عبر VideoPlayerController العتادي مع صوته المدمج
+      if (isMp4 && videoFile.existsSync()) {
+        final ctrl = VideoPlayerController.file(videoFile);
+        await ctrl.initialize();
+        await ctrl.setLooping(false);
+        ctrl.addListener(_onMp4ControllerTick);
+        if (mounted) {
+          setState(() {
+            _mp4Controller = ctrl;
+            _loading = false;
+            _playing = true;
+          });
+          await ctrl.play();
+        } else {
+          await ctrl.dispose();
+        }
+        return;
+      }
+
+      // 2. إذا كان الملف AVI، نستخرج إطاراته للمعاينة
+      final aviCandidate = videoFile.existsSync()
           ? widget.bundle.videoFilePath
           : widget.bundle.projectJsonPath.replaceAll('.json', '.avi');
       final extracted = await RustVideoBridge.instance.extractFramesFromAvi(
@@ -4907,6 +4998,16 @@ class _ExportedVideoPlayerDialogState
   }
 
   Future<void> _startPlayback() async {
+    final mp4Ctrl = _mp4Controller;
+    if (mp4Ctrl != null && mp4Ctrl.value.isInitialized) {
+      if (mp4Ctrl.value.position >= mp4Ctrl.value.duration) {
+        await mp4Ctrl.seekTo(Duration.zero);
+      }
+      await mp4Ctrl.play();
+      if (mounted) setState(() => _playing = true);
+      return;
+    }
+
     if (_frames.isEmpty) return;
     final fps = math.max(1, widget.bundle.fps);
     final proj = _project;
@@ -4954,6 +5055,12 @@ class _ExportedVideoPlayerDialogState
   }
 
   void _pausePlayback() {
+    final mp4Ctrl = _mp4Controller;
+    if (mp4Ctrl != null && mp4Ctrl.value.isInitialized) {
+      mp4Ctrl.pause();
+      if (mounted) setState(() => _playing = false);
+      return;
+    }
     _timer?.cancel();
     _audioPlayer.pause();
     if (mounted) setState(() => _playing = false);
@@ -4961,6 +5068,15 @@ class _ExportedVideoPlayerDialogState
 
   @override
   Widget build(BuildContext context) {
+    final mp4Ctrl = _mp4Controller;
+    final hasMp4 = mp4Ctrl != null && mp4Ctrl.value.isInitialized;
+    final mp4DurationMs = hasMp4
+        ? math.max(1, mp4Ctrl.value.duration.inMilliseconds)
+        : 1;
+    final mp4PositionMs = hasMp4
+        ? mp4Ctrl.value.position.inMilliseconds.clamp(0, mp4DurationMs)
+        : 0;
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Row(
@@ -4988,11 +5104,24 @@ class _ExportedVideoPlayerDialogState
           mainAxisSize: MainAxisSize.min,
           children: [
             AspectRatio(
-              aspectRatio: _project?.numericAspectRatio ?? (9 / 16),
+              aspectRatio: _project?.numericAspectRatio ??
+                  (hasMp4 && mp4Ctrl.value.aspectRatio > 0
+                      ? mp4Ctrl.value.aspectRatio
+                      : (9 / 16)),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
+                    : hasMp4
+                    ? FittedBox(
+                        fit: BoxFit.cover,
+                        clipBehavior: Clip.hardEdge,
+                        child: SizedBox(
+                          width: mp4Ctrl.value.size.width,
+                          height: mp4Ctrl.value.size.height,
+                          child: VideoPlayer(mp4Ctrl),
+                        ),
+                      )
                     : _frames.isEmpty
                     ? (File(widget.bundle.coverImagePath).existsSync()
                           ? Image.file(
@@ -5008,7 +5137,36 @@ class _ExportedVideoPlayerDialogState
               ),
             ),
             const SizedBox(height: 10),
-            if (_frames.isNotEmpty)
+            if (hasMp4)
+              Row(
+                children: [
+                  IconButton.filled(
+                    onPressed: _playing ? _pausePlayback : _startPlayback,
+                    icon: Icon(
+                      _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    ),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: mp4PositionMs.toDouble(),
+                      min: 0.0,
+                      max: mp4DurationMs.toDouble(),
+                      onChanged: (v) {
+                        _pausePlayback();
+                        mp4Ctrl.seekTo(Duration(milliseconds: v.round()));
+                      },
+                    ),
+                  ),
+                  Text(
+                    '${(mp4PositionMs / 1000).toStringAsFixed(1)}s / ${(mp4DurationMs / 1000).toStringAsFixed(1)}s',
+                    style: GoogleFonts.manrope(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              )
+            else if (_frames.isNotEmpty)
               Row(
                 children: [
                   IconButton.filled(
