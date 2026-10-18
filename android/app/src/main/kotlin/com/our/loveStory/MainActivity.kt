@@ -28,6 +28,17 @@ import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import android.opengl.EGL14
+import android.opengl.EGLConfig
+import android.opengl.EGLContext
+import android.opengl.EGLDisplay
+import android.opengl.EGLExt
+import android.opengl.EGLSurface
+import android.opengl.GLES20
+import android.opengl.GLUtils
+import android.opengl.Matrix
+import android.view.Surface
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
@@ -144,6 +155,7 @@ class MainActivity : FlutterFragmentActivity() {
                         val codecMime = call.argument<String>("codecMime") ?: MediaFormat.MIMETYPE_VIDEO_AVC
                         val bitrateBps = (call.argument<Number>("bitrateBps")?.toInt() ?: 14_000_000).coerceIn(2_000_000, 24_000_000)
                         val allowCodecFallback = call.argument<Boolean>("allowCodecFallback") ?: false
+                        val useGpuSurface = call.argument<Boolean>("useGpuSurface") ?: true
 
                         if (aviPath.isNullOrBlank() || outputMp4Path.isNullOrBlank()) {
                             result.error("INVALID_ARGS", "Missing aviPath or outputMp4Path", null)
@@ -169,7 +181,8 @@ class MainActivity : FlutterFragmentActivity() {
                                     requestedHeight = rawHeight,
                                     requestedCodecMime = codecMime,
                                     requestedBitrateBps = bitrateBps,
-                                    allowCodecFallback = allowCodecFallback
+                                    allowCodecFallback = allowCodecFallback,
+                                    useGpuSurface = useGpuSurface
                                 )
                                 runOnUiThread {
                                     result.success(mp4File.absolutePath)
@@ -310,7 +323,8 @@ class MainActivity : FlutterFragmentActivity() {
         requestedHeight: Int,
         requestedCodecMime: String = MediaFormat.MIMETYPE_VIDEO_AVC,
         requestedBitrateBps: Int = 14_000_000,
-        allowCodecFallback: Boolean = false
+        allowCodecFallback: Boolean = false,
+        useGpuSurface: Boolean = true
     ): File {
         val aviFile = File(aviPath)
         if (!aviFile.exists() || aviFile.length() < 32L) {
@@ -391,20 +405,56 @@ class MainActivity : FlutterFragmentActivity() {
         if (outFile.exists()) outFile.delete()
 
         try {
-            streamEncodeFramesAndMuxToMp4(
-                aviFile = aviFile,
-                frameLocations = frameLocations,
-                outputMp4File = outFile,
-                width = encWidth,
-                height = encHeight,
-                sourceFps = safeSourceFps,
-                targetFps = targetFps,
-                totalOutputFrames = totalOutputFrames,
-                codecMime = normalizedMime,
-                bitrateBps = requestedBitrateBps,
-                audioFormat = audioFormat,
-                audioPackets = audioPackets
-            )
+            if (useGpuSurface) {
+                try {
+                    streamEncodeFramesWithGpuSurfaceAndMuxToMp4(
+                        aviFile = aviFile,
+                        frameLocations = frameLocations,
+                        outputMp4File = outFile,
+                        width = encWidth,
+                        height = encHeight,
+                        sourceFps = safeSourceFps,
+                        targetFps = targetFps,
+                        totalOutputFrames = totalOutputFrames,
+                        codecMime = normalizedMime,
+                        bitrateBps = requestedBitrateBps,
+                        audioFormat = audioFormat,
+                        audioPackets = audioPackets
+                    )
+                } catch (gpuEx: Exception) {
+                    // في حال تعثر EGL على جهاز محدد، الانتقال التلقائي لمسار CPU Buffer الآمن (VID-003 / GPU Fallback)
+                    if (outFile.exists()) outFile.delete()
+                    streamEncodeFramesAndMuxToMp4(
+                        aviFile = aviFile,
+                        frameLocations = frameLocations,
+                        outputMp4File = outFile,
+                        width = encWidth,
+                        height = encHeight,
+                        sourceFps = safeSourceFps,
+                        targetFps = targetFps,
+                        totalOutputFrames = totalOutputFrames,
+                        codecMime = normalizedMime,
+                        bitrateBps = requestedBitrateBps,
+                        audioFormat = audioFormat,
+                        audioPackets = audioPackets
+                    )
+                }
+            } else {
+                streamEncodeFramesAndMuxToMp4(
+                    aviFile = aviFile,
+                    frameLocations = frameLocations,
+                    outputMp4File = outFile,
+                    width = encWidth,
+                    height = encHeight,
+                    sourceFps = safeSourceFps,
+                    targetFps = targetFps,
+                    totalOutputFrames = totalOutputFrames,
+                    codecMime = normalizedMime,
+                    bitrateBps = requestedBitrateBps,
+                    audioFormat = audioFormat,
+                    audioPackets = audioPackets
+                )
+            }
         } catch (e: Exception) {
             if (outFile.exists()) outFile.delete()
             if (!allowCodecFallback) {
@@ -1543,4 +1593,410 @@ class MainActivity : FlutterFragmentActivity() {
         }
         return name
     }
+
+    // ─── GPU-Native Surface EGL Subsystem & Zero-Copy Hardware Pipeline ─────────
+
+    private class EglCore(sharedContext: EGLContext? = null) {
+        private var eglDisplay: EGLDisplay = EGL14.EGL_NO_DISPLAY
+        private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
+        private var eglConfig: EGLConfig? = null
+
+        companion object {
+            private const val EGL_RECORDABLE_ANDROID = 0x3142
+        }
+
+        init {
+            eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
+            if (eglDisplay == EGL14.EGL_NO_DISPLAY) {
+                throw RuntimeException("Unable to get EGL14 display")
+            }
+            val version = IntArray(2)
+            if (!EGL14.eglInitialize(eglDisplay, version, 0, version, 1)) {
+                throw RuntimeException("Unable to initialize EGL14")
+            }
+
+            val attribList = intArrayOf(
+                EGL14.EGL_RED_SIZE, 8,
+                EGL14.EGL_GREEN_SIZE, 8,
+                EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_ALPHA_SIZE, 8,
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+                EGL_RECORDABLE_ANDROID, 1,
+                EGL14.EGL_NONE
+            )
+            val configs = arrayOfNulls<EGLConfig>(1)
+            val numConfigs = IntArray(1)
+            EGL14.eglChooseConfig(eglDisplay, attribList, 0, configs, 0, configs.size, numConfigs, 0)
+            if (numConfigs[0] <= 0 || configs[0] == null) {
+                // بديل بدون EGL_RECORDABLE_ANDROID للأجهزة القديمة
+                val fallbackAttribs = intArrayOf(
+                    EGL14.EGL_RED_SIZE, 8,
+                    EGL14.EGL_GREEN_SIZE, 8,
+                    EGL14.EGL_BLUE_SIZE, 8,
+                    EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+                    EGL14.EGL_NONE
+                )
+                EGL14.eglChooseConfig(eglDisplay, fallbackAttribs, 0, configs, 0, configs.size, numConfigs, 0)
+            }
+            eglConfig = configs[0] ?: throw RuntimeException("Unable to find suitable EGLConfig")
+
+            val contextAttribs = intArrayOf(
+                EGL14.EGL_CONTEXT_CLIENT_VERSION, 2,
+                EGL14.EGL_NONE
+            )
+            val shareCtx = sharedContext ?: EGL14.EGL_NO_CONTEXT
+            eglContext = EGL14.eglCreateContext(eglDisplay, eglConfig, shareCtx, contextAttribs, 0)
+            if (eglContext == EGL14.EGL_NO_CONTEXT) {
+                throw RuntimeException("Failed to create EGL context")
+            }
+        }
+
+        fun createWindowSurface(surface: Surface): EGLSurface {
+            val surfaceAttribs = intArrayOf(EGL14.EGL_NONE)
+            val eglSurface = EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, surface, surfaceAttribs, 0)
+            if (eglSurface == EGL14.EGL_NO_SURFACE) {
+                throw RuntimeException("Failed to create EGL window surface")
+            }
+            return eglSurface
+        }
+
+        fun makeCurrent(eglSurface: EGLSurface) {
+            if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) {
+                throw RuntimeException("eglMakeCurrent failed")
+            }
+        }
+
+        fun makeNothingCurrent() {
+            EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
+        }
+
+        fun swapBuffers(eglSurface: EGLSurface): Boolean {
+            return EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+        }
+
+        fun setPresentationTime(eglSurface: EGLSurface, nsecs: Long) {
+            EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, nsecs)
+        }
+
+        fun releaseSurface(eglSurface: EGLSurface) {
+            if (eglSurface != EGL14.EGL_NO_SURFACE) {
+                EGL14.eglDestroySurface(eglDisplay, eglSurface)
+            }
+        }
+
+        fun release() {
+            if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
+                EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
+                if (eglContext != EGL14.EGL_NO_CONTEXT) {
+                    EGL14.eglDestroyContext(eglDisplay, eglContext)
+                    eglContext = EGL14.EGL_NO_CONTEXT
+                }
+                EGL14.eglTerminate(eglDisplay)
+                eglDisplay = EGL14.EGL_NO_DISPLAY
+            }
+        }
+    }
+
+    private class GpuTextureProgram {
+        private var programHandle: Int = 0
+        private var uMVPMatrixLoc: Int = 0
+        private var aPositionLoc: Int = 0
+        private var aTextureCoordLoc: Int = 0
+        private var sTextureLoc: Int = 0
+
+        private val vertexShaderCode = """
+            uniform mat4 uMVPMatrix;
+            attribute vec4 aPosition;
+            attribute vec2 aTextureCoord;
+            varying vec2 vTextureCoord;
+            void main() {
+                gl_Position = uMVPMatrix * aPosition;
+                vTextureCoord = aTextureCoord;
+            }
+        """.trimIndent()
+
+        private val fragmentShaderCode = """
+            precision mediump float;
+            varying vec2 vTextureCoord;
+            uniform sampler2D sTexture;
+            void main() {
+                gl_FragColor = texture2D(sTexture, vTextureCoord);
+            }
+        """.trimIndent()
+
+        private val vertexCoords = floatArrayOf(
+            -1.0f, -1.0f,
+             1.0f, -1.0f,
+            -1.0f,  1.0f,
+             1.0f,  1.0f
+        )
+
+        private val textureCoords = floatArrayOf(
+            0.0f, 1.0f,
+            1.0f, 1.0f,
+            0.0f, 0.0f,
+            1.0f, 0.0f
+        )
+
+        private val vertexBuffer: FloatBuffer
+        private val textureBuffer: FloatBuffer
+
+        init {
+            val vBb = ByteBuffer.allocateDirect(vertexCoords.size * 4).order(ByteOrder.nativeOrder())
+            vertexBuffer = vBb.asFloatBuffer().apply {
+                put(vertexCoords)
+                position(0)
+            }
+
+            val tBb = ByteBuffer.allocateDirect(textureCoords.size * 4).order(ByteOrder.nativeOrder())
+            textureBuffer = tBb.asFloatBuffer().apply {
+                put(textureCoords)
+                position(0)
+            }
+
+            val vShader = compileShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode)
+            val fShader = compileShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderCode)
+            programHandle = GLES20.glCreateProgram()
+            GLES20.glAttachShader(programHandle, vShader)
+            GLES20.glAttachShader(programHandle, fShader)
+            GLES20.glLinkProgram(programHandle)
+
+            val linkStatus = IntArray(1)
+            GLES20.glGetProgramiv(programHandle, GLES20.GL_LINK_STATUS, linkStatus, 0)
+            if (linkStatus[0] != GLES20.GL_TRUE) {
+                val error = GLES20.glGetProgramInfoLog(programHandle)
+                GLES20.glDeleteProgram(programHandle)
+                throw RuntimeException("Could not link GL program: $error")
+            }
+
+            uMVPMatrixLoc = GLES20.glGetUniformLocation(programHandle, "uMVPMatrix")
+            aPositionLoc = GLES20.glGetAttribLocation(programHandle, "aPosition")
+            aTextureCoordLoc = GLES20.glGetAttribLocation(programHandle, "aTextureCoord")
+            sTextureLoc = GLES20.glGetUniformLocation(programHandle, "sTexture")
+        }
+
+        private fun compileShader(type: Int, shaderCode: String): Int {
+            val shader = GLES20.glCreateShader(type)
+            GLES20.glShaderSource(shader, shaderCode)
+            GLES20.glCompileShader(shader)
+            val compiled = IntArray(1)
+            GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, compiled, 0)
+            if (compiled[0] == 0) {
+                val info = GLES20.glGetShaderInfoLog(shader)
+                GLES20.glDeleteShader(shader)
+                throw RuntimeException("Could not compile shader $type: $info")
+            }
+            return shader
+        }
+
+        fun draw(textureId: Int, mvpMatrix: FloatArray) {
+            GLES20.glUseProgram(programHandle)
+
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
+            GLES20.glUniform1i(sTextureLoc, 0)
+
+            GLES20.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, mvpMatrix, 0)
+
+            GLES20.glEnableVertexAttribArray(aPositionLoc)
+            GLES20.glVertexAttribPointer(aPositionLoc, 2, GLES20.GL_FLOAT, false, 8, vertexBuffer)
+
+            GLES20.glEnableVertexAttribArray(aTextureCoordLoc)
+            GLES20.glVertexAttribPointer(aTextureCoordLoc, 2, GLES20.GL_FLOAT, false, 8, textureBuffer)
+
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+
+            GLES20.glDisableVertexAttribArray(aPositionLoc)
+            GLES20.glDisableVertexAttribArray(aTextureCoordLoc)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+            GLES20.glUseProgram(0)
+        }
+
+        fun release() {
+            if (programHandle != 0) {
+                GLES20.glDeleteProgram(programHandle)
+                programHandle = 0
+            }
+        }
+    }
+
+    /// مسار التصدير العتادي فائق السرعة عبر سطح الرسوميات (Zero-Copy GPU Surface Pipeline)
+    /// يرسم الإطارات عبر OpenGL ES مباشرة على سطح إدخال المشفر `MediaCodec.createInputSurface()`
+    private fun streamEncodeFramesWithGpuSurfaceAndMuxToMp4(
+        aviFile: File,
+        frameLocations: List<AviFrameLocation>,
+        outputMp4File: File,
+        width: Int,
+        height: Int,
+        sourceFps: Int,
+        targetFps: Int,
+        totalOutputFrames: Int,
+        codecMime: String,
+        bitrateBps: Int,
+        audioFormat: MediaFormat?,
+        audioPackets: List<EncodedPacket>
+    ) {
+        val format = MediaFormat.createVideoFormat(codecMime, width, height).apply {
+            setInteger(
+                MediaFormat.KEY_COLOR_FORMAT,
+                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
+            )
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
+            setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+        }
+
+        val encoder = MediaCodec.createEncoderByType(codecMime)
+        encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        val inputSurface = encoder.createInputSurface()
+        encoder.start()
+
+        val muxer = MediaMuxer(outputMp4File.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        var muxerStarted = false
+        var videoTrackIdx = -1
+        var audioTrackIdx = -1
+
+        var eglCore: EglCore? = null
+        var eglSurface: EGLSurface? = null
+        var gpuProgram: GpuTextureProgram? = null
+        val textureIds = IntArray(1)
+
+        try {
+            eglCore = EglCore()
+            eglSurface = eglCore.createWindowSurface(inputSurface)
+            eglCore.makeCurrent(eglSurface)
+
+            gpuProgram = GpuTextureProgram()
+
+            GLES20.glGenTextures(1, textureIds, 0)
+            val texId = textureIds[0]
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+
+            val mvpMatrix = FloatArray(16)
+            Matrix.setIdentityM(mvpMatrix, 0)
+
+            val bufferInfo = MediaCodec.BufferInfo()
+            var cachedSrcFrameIdx = -1
+            var cachedBitmap: Bitmap? = null
+
+            fun drainEncoder(endOfStream: Boolean) {
+                if (endOfStream) {
+                    encoder.signalEndOfInputStream()
+                }
+                while (true) {
+                    val outStatus = encoder.dequeueOutputBuffer(bufferInfo, if (endOfStream) 15_000 else 0)
+                    when {
+                        outStatus == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                            if (!endOfStream) return
+                            break
+                        }
+                        outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            if (muxerStarted) throw IllegalStateException("Format changed twice")
+                            videoTrackIdx = muxer.addTrack(encoder.outputFormat)
+                            if (audioFormat != null && audioPackets.isNotEmpty()) {
+                                audioTrackIdx = muxer.addTrack(audioFormat)
+                            }
+                            muxer.start()
+                            muxerStarted = true
+                        }
+                        outStatus >= 0 -> {
+                            val outBuf = encoder.getOutputBuffer(outStatus)
+                            if (outBuf != null && bufferInfo.size > 0 &&
+                                (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
+                            ) {
+                                if (!muxerStarted) {
+                                    videoTrackIdx = muxer.addTrack(encoder.outputFormat)
+                                    if (audioFormat != null && audioPackets.isNotEmpty()) {
+                                        audioTrackIdx = muxer.addTrack(audioFormat)
+                                    }
+                                    muxer.start()
+                                    muxerStarted = true
+                                }
+                                outBuf.position(bufferInfo.offset)
+                                outBuf.limit(bufferInfo.offset + bufferInfo.size)
+                                muxer.writeSampleData(videoTrackIdx, outBuf, bufferInfo)
+                            }
+                            encoder.releaseOutputBuffer(outStatus, false)
+                            if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                return
+                            }
+                        }
+                    }
+                }
+            }
+
+            RandomAccessFile(aviFile, "r").use { raf ->
+                for (outIdx in 0 until totalOutputFrames) {
+                    val srcIdx = ((outIdx.toLong() * sourceFps.toLong()) / targetFps.toLong())
+                        .toInt()
+                        .coerceIn(0, frameLocations.size - 1)
+
+                    if (srcIdx != cachedSrcFrameIdx) {
+                        val loc = frameLocations[srcIdx]
+                        val pngBytes = ByteArray(loc.size)
+                        raf.seek(loc.offset)
+                        raf.readFully(pngBytes)
+
+                        cachedBitmap?.recycle()
+                        cachedBitmap = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.size)
+                        cachedSrcFrameIdx = srcIdx
+                    }
+
+                    val bmp = cachedBitmap ?: throw IllegalStateException("Null frame bitmap at index $srcIdx")
+
+                    GLES20.glViewport(0, 0, width, height)
+                    GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
+                    GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+
+                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
+                    GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bmp, 0)
+                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+
+                    gpuProgram.draw(texId, mvpMatrix)
+
+                    val ptsNs = (outIdx.toLong() * 1_000_000_000L) / targetFps.toLong()
+                    eglCore.setPresentationTime(eglSurface, ptsNs)
+                    eglCore.swapBuffers(eglSurface)
+
+                    drainEncoder(false)
+                }
+            }
+
+            cachedBitmap?.recycle()
+            cachedBitmap = null
+
+            drainEncoder(true)
+
+            if (muxerStarted && audioTrackIdx >= 0) {
+                val audInfo = MediaCodec.BufferInfo()
+                for (pkt in audioPackets) {
+                    audInfo.set(0, pkt.data.size, pkt.presentationTimeUs, pkt.flags)
+                    muxer.writeSampleData(audioTrackIdx, ByteBuffer.wrap(pkt.data), audInfo)
+                }
+            }
+        } finally {
+            if (textureIds[0] != 0) {
+                GLES20.glDeleteTextures(1, textureIds, 0)
+            }
+            gpuProgram?.release()
+            if (eglCore != null && eglSurface != null) {
+                eglCore.releaseSurface(eglSurface)
+            }
+            eglCore?.release()
+            inputSurface.release()
+
+            try { encoder.stop() } catch (_: Exception) {}
+            try { encoder.release() } catch (_: Exception) {}
+            if (muxerStarted) {
+                try { muxer.stop() } catch (_: Exception) {}
+            }
+            try { muxer.release() } catch (_: Exception) {}
+        }
+    }
+
 }
