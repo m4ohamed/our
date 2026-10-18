@@ -26,6 +26,7 @@ class OffscreenVideoCompositor {
     required VideoExportConfig config,
     int? renderFps,
     VideoExportCancelToken? cancelToken,
+    bool asRawRgba = false,
     void Function(double progress, String status)? onProgress,
     required FutureOr<void> Function(
       int batchStartFrame,
@@ -113,6 +114,7 @@ class OffscreenVideoCompositor {
               height: height,
               preloadedImages: preloadedImages,
               colorMatrix: colorMatrix,
+              asRawRgba: asRawRgba,
             ),
           );
         }
@@ -162,6 +164,7 @@ class OffscreenVideoCompositor {
     required VideoExportConfig config,
     int? renderFps,
     VideoExportCancelToken? cancelToken,
+    bool asRawRgba = false,
     void Function(double progress, String status)? onProgress,
   }) async {
     final List<Uint8List> allFrames = <Uint8List>[];
@@ -242,6 +245,7 @@ class OffscreenVideoCompositor {
     required int height,
     required Map<String, ui.Image> preloadedImages,
     required List<double> colorMatrix,
+    bool asRawRgba = false,
   }) async {
     final recorder = ui.PictureRecorder();
     final double w = width.toDouble();
@@ -372,7 +376,7 @@ class OffscreenVideoCompositor {
     final picture = recorder.endRecording();
     final img = await picture.toImage(width, height);
     try {
-      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+      final byteData = await img.toByteData(format: asRawRgba ? ui.ImageByteFormat.rawRgba : ui.ImageByteFormat.png);
       if (byteData != null) {
         return byteData.buffer.asUint8List(
           byteData.offsetInBytes,

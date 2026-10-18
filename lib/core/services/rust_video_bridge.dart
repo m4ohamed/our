@@ -2694,42 +2694,15 @@ class RustVideoBridge {
     );
     final int effectiveFps = config.targetFps.clamp(15, 60);
 
-    List<Uint8List> validInputFrames = renderedFrames
-        .where((f) => f.length >= 8 && _hasValidPngSignature(f))
-        .toList();
+    // استخدام الأبعاد ومعدل الإطارات المستهدفين
+    final int activeWidth = width > 0 && width.isEven ? width : targetW;
+    final int activeHeight = height > 0 && height.isEven ? height : targetH;
+    final int activeFps = fps > 0 ? fps : effectiveFps;
 
-    // إذا لم تُمرر إطارات جاهزة، نولّدها عبر محرك الرندر الخلفي المستقل بالدقة ومعدل الإطارات المستهدفين (VID-015)
-    int activeWidth = width > 0 && width.isEven ? width : targetW;
-    int activeHeight = height > 0 && height.isEven ? height : targetH;
-    int activeFps = fps > 0 ? fps : effectiveFps;
-
-    if (validInputFrames.isEmpty) {
-      if (renderedFrames.isNotEmpty) {
-        // تم تمرير قائمة إطارات لكنها كلها فارغة أو تالفة (VID-012)
-        throw const VideoExportException(
-          stage: VideoExportStage.rendering,
-          message: 'فشل التصدير: الإطارات الممررة فارغة أو تالفة.',
-        );
-      }
-      validInputFrames =
-          await OffscreenVideoCompositor.renderProjectFramesParallel(
-            project: project,
-            config: config,
-            renderFps: effectiveFps,
-            cancelToken: cancelToken,
-            onProgress: onProgress,
-          );
-      activeWidth = targetW;
-      activeHeight = targetH;
-      activeFps = effectiveFps;
-    }
-
-    if (validInputFrames.isEmpty) {
-      throw const VideoExportException(
-        stage: VideoExportStage.rendering,
-        message: 'فشل الرندر الخلفي: لم يتم إنتاج أي إطارات صالحة للتصدير.',
-      );
-    }
+    final int totalFrames = math.max(
+      1,
+      (project.totalDuration * activeFps).round(),
+    );
 
     cancelToken?.throwIfCancelled(VideoExportStage.processing);
 
@@ -2747,22 +2720,19 @@ class RustVideoBridge {
     final List<String> tempFilesToClean = <String>[];
 
     try {
-      await coverFile.writeAsBytes(validInputFrames.first, flush: true);
-
       final preparedAudioPath = await _prepareAudioFileForExport(project);
       Uint8List? rustProcessedPcm;
       String? processedPcmFilePath;
       int pcmSampleRate = 44100;
       int pcmChannels = 2;
 
-      final durationMs =
-          ((validInputFrames.length / math.max(1, activeFps)) * 1000).round();
+      final durationMs = ((totalFrames / math.max(1, activeFps)) * 1000).round();
 
       // 1. فك ترميز الموسيقى الخلفية + كافة المؤثرات الصوتية على خط الزمن ومزجها مع توحيد معدلات العينات (VID-001 / VID-005)
       if (Platform.isAndroid &&
           (preparedAudioPath != null || project.soundEffects.isNotEmpty)) {
         onProgress?.call(
-          0.78,
+          0.04,
           'معالجة الصوت: جاري فك الترميز وتوحيد معدلات العينات وتطبيق التلاشي...',
         );
         final tempDir = await getTemporaryDirectory();
@@ -2864,23 +2834,70 @@ class RustVideoBridge {
         }
       }
 
-      cancelToken?.throwIfCancelled(VideoExportStage.encoding);
-      onProgress?.call(
-        0.84,
-        'التجميع: جاري كتابة حاوية الفيديو والصوت المتداخلة...',
-      );
+      cancelToken?.throwIfCancelled(VideoExportStage.rendering);
 
-      // 2. تجميع الإطارات (`00dc`) مع الصوت المتداخل (`01wb`) داخل حاوية RIFF/AVI
-      await muxFramesToVideoContainer(
-        frames: validInputFrames,
+      // 2. فتح كاتب AVI المتدفق إلى القرص ورندر الإطارات بالدفعات المحدودة مع كتابة كل دفعة فوراً
+      // لتحقيق استهلاك ذاكرة مقيد تماماً (Bounded Memory) دون الاحتفاظ بأي إطارات مجمعة في RAM! (VID-003)
+      final writer = await StreamingAviFileWriter.open(
         outputPath: aviPath,
         width: activeWidth,
         height: activeHeight,
         fps: activeFps,
+        totalExpectedFrames: totalFrames,
         pcm16Audio: rustProcessedPcm,
         audioSampleRate: pcmSampleRate,
         audioChannels: pcmChannels,
       );
+
+      int framesWrittenTotal = 0;
+      try {
+        if (renderedFrames.isNotEmpty) {
+          // مسار التوافق عند تمرير إطارات جاهزة
+          for (int i = 0; i < renderedFrames.length; i++) {
+            cancelToken?.throwIfCancelled(VideoExportStage.rendering);
+            final frame = renderedFrames[i];
+            if (i == 0) {
+              await coverFile.writeAsBytes(frame, flush: true);
+            }
+            await writer.writeFrame(frame);
+            framesWrittenTotal++;
+          }
+        } else {
+          // المسار الافتراضي الاحترافي: رندر متدفق ودفعات متوازية تُسلّم مباشرة لكاتب القرص
+          await OffscreenVideoCompositor.renderProjectFramesStreamed(
+            project: project,
+            config: config,
+            renderFps: activeFps,
+            cancelToken: cancelToken,
+            onProgress: (prog, status) {
+              // 0.05 .. 0.82
+              onProgress?.call(0.05 + prog * 0.77, status);
+            },
+            onBatchReady: (batchStart, batchFrames, w, h, fps) async {
+              cancelToken?.throwIfCancelled(VideoExportStage.rendering);
+              for (int i = 0; i < batchFrames.length; i++) {
+                if (framesWrittenTotal == 0 && i == 0) {
+                  await coverFile.writeAsBytes(batchFrames[0], flush: true);
+                }
+                await writer.writeFrame(batchFrames[i]);
+                framesWrittenTotal++;
+              }
+              // تتحرر مراجع batchFrames فور انتهاء الـ callback ويعاد تدوير الذاكرة بواسطة الـ GC
+            },
+          );
+        }
+        await writer.finalize();
+      } catch (e) {
+        await writer.abort();
+        rethrow;
+      }
+
+      if (framesWrittenTotal == 0) {
+        throw const VideoExportException(
+          stage: VideoExportStage.rendering,
+          message: 'فشل الرندر الخلفي: لم يتم إنتاج أي إطارات صالحة للتصدير.',
+        );
+      }
 
       String finalVideoPath = aviPath;
 
