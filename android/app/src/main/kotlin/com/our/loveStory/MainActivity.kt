@@ -1,10 +1,15 @@
 package com.our.loveStory
 
 import android.app.Activity
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
@@ -14,10 +19,20 @@ import android.media.MediaMetadataRetriever
 import android.media.MediaMuxer
 import android.media.MediaScannerConnection
 import android.net.Uri
+import android.opengl.EGL14
+import android.opengl.EGLConfig
+import android.opengl.EGLContext
+import android.opengl.EGLDisplay
+import android.opengl.EGLExt
+import android.opengl.EGLSurface
+import android.opengl.GLES20
+import android.opengl.GLUtils
+import android.opengl.Matrix
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.view.Surface
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -29,16 +44,7 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
-import android.opengl.EGL14
-import android.opengl.EGLConfig
-import android.opengl.EGLContext
-import android.opengl.EGLDisplay
-import android.opengl.EGLExt
-import android.opengl.EGLSurface
-import android.opengl.GLES20
-import android.opengl.GLUtils
-import android.opengl.Matrix
-import android.view.Surface
+import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
@@ -51,6 +57,10 @@ class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.our.loveStory/media_bridge"
     private val pickAudioRequestCode = 9041
     private var pendingAudioResult: MethodChannel.Result? = null
+
+    // خيط مخصص وثابت لجميع عمليات جلسة EGL المباشرة لضمان ارتباط EGLContext بنفس الخيط دائماً
+    private val eglSessionExecutor = Executors.newSingleThreadExecutor()
+    private var activeRgbaSession: RgbaStreamEncoder? = null
 
     private class EncodedPacket(
         val data: ByteArray,
@@ -67,6 +77,19 @@ class MainActivity : FlutterFragmentActivity() {
         private val PNG_MAGIC = byteArrayOf(
             0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
         )
+    }
+
+    override fun onDestroy() {
+        try {
+            eglSessionExecutor.execute {
+                try {
+                    activeRgbaSession?.abort()
+                } catch (_: Exception) {}
+                activeRgbaSession = null
+            }
+            eglSessionExecutor.shutdown()
+        } catch (_: Exception) {}
+        super.onDestroy()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -111,7 +134,6 @@ class MainActivity : FlutterFragmentActivity() {
                                 if (info == null) {
                                     runOnUiThread { result.success(null) }
                                 } else {
-                                    // توحيد القنوات الصوتية إلى Stereo (قناتين) مع الاحتفاظ بمعدل العينات الفعلي للمصدر (VID-005)
                                     val stereoBytes = if (info.third == 1) {
                                         monoPcm16ToStereo(info.first)
                                     } else {
@@ -137,6 +159,125 @@ class MainActivity : FlutterFragmentActivity() {
                         }.start()
                     }
 
+                    "startDirectMp4EncodeSession" -> {
+                        val outputMp4Path = call.argument<String>("outputMp4Path")
+                        val processedPcmPath = call.argument<String>("processedPcmPath")
+                        val audioPath = call.argument<String>("audioPath")
+                        val pcmSampleRate = (call.argument<Number>("pcmSampleRate")?.toInt() ?: 44100)
+                        val pcmChannels = (call.argument<Number>("pcmChannels")?.toInt() ?: 2)
+                        val fps = (call.argument<Number>("fps")?.toInt() ?: 30).coerceIn(15, 60)
+                        val rawWidth = (call.argument<Number>("width")?.toInt() ?: 1080)
+                        val rawHeight = (call.argument<Number>("height")?.toInt() ?: 1920)
+                        val codecMime = call.argument<String>("codecMime") ?: MediaFormat.MIMETYPE_VIDEO_AVC
+                        val bitrateBps = (call.argument<Number>("bitrateBps")?.toInt() ?: 14_000_000)
+                            .coerceIn(2_000_000, 24_000_000)
+                        val cropToFill = call.argument<Boolean>("cropToFill") ?: false
+
+                        if (outputMp4Path.isNullOrBlank()) {
+                            result.error("INVALID_ARGS", "Missing outputMp4Path", null)
+                            return@setMethodCallHandler
+                        }
+
+                        eglSessionExecutor.execute {
+                            try {
+                                activeRgbaSession?.abort()
+                                activeRgbaSession = null
+
+                                val session = RgbaStreamEncoder(
+                                    outputMp4File = File(outputMp4Path),
+                                    requestedWidth = rawWidth,
+                                    requestedHeight = rawHeight,
+                                    targetFps = fps,
+                                    requestedCodecMime = codecMime,
+                                    bitrateBps = bitrateBps,
+                                    processedPcmPath = processedPcmPath,
+                                    audioPath = audioPath,
+                                    pcmSampleRate = pcmSampleRate,
+                                    pcmChannels = pcmChannels,
+                                    cropToFill = cropToFill
+                                )
+                                session.start()
+                                activeRgbaSession = session
+                                runOnUiThread { result.success(true) }
+                            } catch (e: Exception) {
+                                activeRgbaSession?.abort()
+                                activeRgbaSession = null
+                                runOnUiThread {
+                                    result.error("DIRECT_SESSION_START_FAILED", e.message, null)
+                                }
+                            }
+                        }
+                    }
+
+                    "appendRgbaFrameToSession" -> {
+                        val rgbaBytes = call.argument<ByteArray>("rgbaBytes")
+                        val frameIndex = call.argument<Number>("frameIndex")?.toInt() ?: 0
+                        val frameWidth = call.argument<Number>("width")?.toInt()
+                        val frameHeight = call.argument<Number>("height")?.toInt()
+
+                        if (rgbaBytes == null || rgbaBytes.isEmpty()) {
+                            result.error("INVALID_ARGS", "Empty rgbaBytes", null)
+                            return@setMethodCallHandler
+                        }
+
+                        eglSessionExecutor.execute {
+                            val session = activeRgbaSession
+                            if (session == null) {
+                                runOnUiThread {
+                                    result.error("NO_ACTIVE_SESSION", "Direct MP4 session is not active", null)
+                                }
+                                return@execute
+                            }
+                            try {
+                                session.appendFrame(
+                                    rgbaBytes = rgbaBytes,
+                                    frameIndex = frameIndex,
+                                    srcWidth = frameWidth ?: session.width,
+                                    srcHeight = frameHeight ?: session.height
+                                )
+                                runOnUiThread { result.success(true) }
+                            } catch (e: Exception) {
+                                session.abort()
+                                activeRgbaSession = null
+                                runOnUiThread {
+                                    result.error("DIRECT_FRAME_APPEND_FAILED", e.message, null)
+                                }
+                            }
+                        }
+                    }
+
+                    "finishDirectMp4EncodeSession" -> {
+                        eglSessionExecutor.execute {
+                            val session = activeRgbaSession
+                            activeRgbaSession = null
+                            if (session == null) {
+                                runOnUiThread {
+                                    result.error("NO_ACTIVE_SESSION", "No active direct MP4 session to finish", null)
+                                }
+                                return@execute
+                            }
+                            try {
+                                val outFile = session.finish()
+                                runOnUiThread { result.success(outFile.absolutePath) }
+                            } catch (e: Exception) {
+                                session.abort()
+                                runOnUiThread {
+                                    result.error("DIRECT_SESSION_FINISH_FAILED", e.message, null)
+                                }
+                            }
+                        }
+                    }
+
+                    "abortDirectMp4EncodeSession" -> {
+                        eglSessionExecutor.execute {
+                            try {
+                                activeRgbaSession?.abort()
+                            } catch (_: Exception) {}
+                            activeRgbaSession = null
+                            runOnUiThread { result.success(true) }
+                        }
+                    }
+
                     "muxToMp4WithAudio" -> {
                         val aviPath = call.argument<String>("aviPath")
                         val outputMp4Path = call.argument<String>("outputMp4Path")
@@ -156,6 +297,7 @@ class MainActivity : FlutterFragmentActivity() {
                         val bitrateBps = (call.argument<Number>("bitrateBps")?.toInt() ?: 14_000_000).coerceIn(2_000_000, 24_000_000)
                         val allowCodecFallback = call.argument<Boolean>("allowCodecFallback") ?: false
                         val useGpuSurface = call.argument<Boolean>("useGpuSurface") ?: true
+                        val cropToFill = call.argument<Boolean>("cropToFill") ?: false
 
                         if (aviPath.isNullOrBlank() || outputMp4Path.isNullOrBlank()) {
                             result.error("INVALID_ARGS", "Missing aviPath or outputMp4Path", null)
@@ -182,7 +324,8 @@ class MainActivity : FlutterFragmentActivity() {
                                     requestedCodecMime = codecMime,
                                     requestedBitrateBps = bitrateBps,
                                     allowCodecFallback = allowCodecFallback,
-                                    useGpuSurface = useGpuSurface
+                                    useGpuSurface = useGpuSurface,
+                                    cropToFill = cropToFill
                                 )
                                 runOnUiThread {
                                     result.success(mp4File.absolutePath)
@@ -304,6 +447,593 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    private fun resolveEncoderDimensions(requestedWidth: Int, requestedHeight: Int): Pair<Int, Int> {
+        val isFullHd = max(requestedWidth, requestedHeight) >= 1400 || min(requestedWidth, requestedHeight) >= 1000
+        val aspect = requestedWidth.toDouble() / max(1, requestedHeight).toDouble()
+        return when {
+            aspect < 0.8 -> if (isFullHd) Pair(1080, 1920) else Pair(720, 1280)   // 9:16 Portrait
+            aspect > 1.2 -> if (isFullHd) Pair(1920, 1080) else Pair(1280, 720)   // 16:9 Landscape
+            else -> if (isFullHd) Pair(1080, 1080) else Pair(720, 720)            // 1:1 Square
+        }
+    }
+
+    /// حساب مصفوفة التحويل في OpenGL مع الحفاظ على نسبة العرض إلى الارتفاع (Contain Letterbox/Pillarbox أو Cover Center-Crop)
+    private fun computeAspectRatioMvpMatrix(
+        srcWidth: Int,
+        srcHeight: Int,
+        dstWidth: Int,
+        dstHeight: Int,
+        cropToFill: Boolean,
+        outMatrix: FloatArray
+    ) {
+        Matrix.setIdentityM(outMatrix, 0)
+        val srcAspect = srcWidth.toFloat() / max(1, srcHeight).toFloat()
+        val dstAspect = dstWidth.toFloat() / max(1, dstHeight).toFloat()
+        if (abs(srcAspect - dstAspect) > 0.005f) {
+            if (cropToFill) {
+                // وضع Cover: ملء الشاشة بالكامل مع قص الحواف الزائدة دون تمدد
+                if (srcAspect > dstAspect) {
+                    Matrix.scaleM(outMatrix, 0, srcAspect / dstAspect, 1.0f, 1.0f)
+                } else {
+                    Matrix.scaleM(outMatrix, 0, 1.0f, dstAspect / srcAspect, 1.0f)
+                }
+            } else {
+                // وضع Contain: احتواء كامل للصورة داخل الإطار (Letterbox / Pillarbox) دون تشويه
+                if (srcAspect > dstAspect) {
+                    Matrix.scaleM(outMatrix, 0, 1.0f, dstAspect / srcAspect, 1.0f)
+                } else {
+                    Matrix.scaleM(outMatrix, 0, srcAspect / dstAspect, 1.0f, 1.0f)
+                }
+            }
+        }
+    }
+
+    /// تحجيم Bitmap في مسار الـ CPU مع الحفاظ التام على نسبة الأبعاد (Contain أو Cover) لمنع التمدد
+    private fun scaleBitmapPreservingAspect(
+        src: Bitmap,
+        dstWidth: Int,
+        dstHeight: Int,
+        cropToFill: Boolean
+    ): Bitmap {
+        if (src.width == dstWidth && src.height == dstHeight) {
+            return src
+        }
+        val srcAspect = src.width.toFloat() / max(1, src.height).toFloat()
+        val dstAspect = dstWidth.toFloat() / max(1, dstHeight).toFloat()
+        if (abs(srcAspect - dstAspect) <= 0.005f) {
+            return Bitmap.createScaledBitmap(src, dstWidth, dstHeight, true)
+        }
+
+        val outBitmap = Bitmap.createBitmap(dstWidth, dstHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(outBitmap)
+        canvas.drawColor(Color.BLACK)
+
+        val scale = if (cropToFill) {
+            max(dstWidth.toFloat() / src.width.toFloat(), dstHeight.toFloat() / src.height.toFloat())
+        } else {
+            min(dstWidth.toFloat() / src.width.toFloat(), dstHeight.toFloat() / src.height.toFloat())
+        }
+
+        val scaledW = src.width * scale
+        val scaledH = src.height * scale
+        val left = (dstWidth - scaledW) * 0.5f
+        val top = (dstHeight - scaledH) * 0.5f
+        val dstRect = RectF(left, top, left + scaledW, top + scaledH)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        canvas.drawBitmap(src, null, dstRect, paint)
+        return outBitmap
+    }
+
+    // ─── Direct Raw RGBA8888 Streaming Encoder Session (Zero-AVI / Zero-PNG) ───
+
+    private inner class RgbaStreamEncoder(
+        val outputMp4File: File,
+        requestedWidth: Int,
+        requestedHeight: Int,
+        val targetFps: Int,
+        requestedCodecMime: String,
+        val bitrateBps: Int,
+        val processedPcmPath: String?,
+        val audioPath: String?,
+        val pcmSampleRate: Int,
+        val pcmChannels: Int,
+        val cropToFill: Boolean = false
+    ) {
+        val width: Int
+        val height: Int
+        val codecMime: String
+
+        private var encoder: MediaCodec? = null
+        private var muxer: MediaMuxer? = null
+        private var inputSurface: Surface? = null
+        private var eglCore: EglCore? = null
+        private var eglSurface: EGLSurface? = null
+        private var gpuProgram: GpuTextureProgram? = null
+        private val textureIds = IntArray(1)
+        private var textureInitialized = false
+        private var lastTexWidth = 0
+        private var lastTexHeight = 0
+
+        private var directRgbaBuffer: ByteBuffer? = null
+        private val mvpMatrix = FloatArray(16)
+        private val bufferInfo = MediaCodec.BufferInfo()
+        private val audInfo = MediaCodec.BufferInfo()
+
+        private var audioFormat: MediaFormat? = null
+        private var audioPackets: List<EncodedPacket> = emptyList()
+        private var audioPacketCursor = 0
+
+        private var encoderStarted = false
+        private var muxerStarted = false
+        private var videoTrackIdx = -1
+        private var audioTrackIdx = -1
+        private var useCpuFallback = false
+        private var cpuArgbScratch: IntArray? = null
+        private var framesEncodedCount = 0
+        private var lastFrameIndex = 0
+        private var closed = false
+
+        init {
+            val (encW, encH) = resolveEncoderDimensions(requestedWidth, requestedHeight)
+            width = encW
+            height = encH
+            codecMime = if (requestedCodecMime.equals("video/hevc", ignoreCase = true)) {
+                MediaFormat.MIMETYPE_VIDEO_HEVC
+            } else {
+                MediaFormat.MIMETYPE_VIDEO_AVC
+            }
+        }
+
+        fun start() {
+            if (outputMp4File.exists()) {
+                outputMp4File.delete()
+            }
+
+            // 1. تجهيز مسار الصوت المضغوط (AAC) للتداخل المباشر مع الإطارات
+            if (!processedPcmPath.isNullOrBlank() && File(processedPcmPath).exists()) {
+                val pcmFile = File(processedPcmPath)
+                if (pcmFile.length() > 0L) {
+                    val encoded = encodePcmFileStreamToAac(
+                        pcmFile = pcmFile,
+                        sampleRate = pcmSampleRate,
+                        channelCount = pcmChannels
+                    )
+                    audioFormat = encoded.first
+                    audioPackets = encoded.second
+                }
+            }
+
+            // 2. محاولة بدء مسار GPU Surface المباشر، مع سقوط آمن لمسار CPU عند الضرورة
+            try {
+                startGpuSurfacePipeline()
+                useCpuFallback = false
+            } catch (_: Exception) {
+                releaseGpuResourcesOnly()
+                startCpuBufferPipeline()
+                useCpuFallback = true
+            }
+        }
+
+        private fun startGpuSurfacePipeline() {
+            val format = MediaFormat.createVideoFormat(codecMime, width, height).apply {
+                setInteger(
+                    MediaFormat.KEY_COLOR_FORMAT,
+                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
+                )
+                setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
+                setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+                setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
+                setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
+                setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
+            }
+
+            val enc = MediaCodec.createEncoderByType(codecMime)
+            enc.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            val surface = enc.createInputSurface()
+            enc.start()
+
+            encoder = enc
+            inputSurface = surface
+            encoderStarted = true
+
+            muxer = MediaMuxer(outputMp4File.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+
+            val core = EglCore()
+            val winSurface = core.createWindowSurface(surface)
+            core.makeCurrent(winSurface)
+
+            val prog = GpuTextureProgram()
+            GLES20.glGenTextures(1, textureIds, 0)
+            val texId = textureIds[0]
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+
+            eglCore = core
+            eglSurface = winSurface
+            gpuProgram = prog
+        }
+
+        private fun startCpuBufferPipeline() {
+            val format = MediaFormat.createVideoFormat(codecMime, width, height).apply {
+                setInteger(
+                    MediaFormat.KEY_COLOR_FORMAT,
+                    MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
+                )
+                setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
+                setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+                setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
+                setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
+                setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
+            }
+
+            val enc = MediaCodec.createEncoderByType(codecMime)
+            enc.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            enc.start()
+            encoder = enc
+            encoderStarted = true
+
+            muxer = MediaMuxer(outputMp4File.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            cpuArgbScratch = IntArray(width * height)
+        }
+
+        fun appendFrame(
+            rgbaBytes: ByteArray,
+            frameIndex: Int,
+            srcWidth: Int,
+            srcHeight: Int
+        ) {
+            if (closed) {
+                throw IllegalStateException("Session is already closed")
+            }
+            val expectedBytes = srcWidth * srcHeight * 4
+            if (srcWidth <= 0 || srcHeight <= 0 || rgbaBytes.size < expectedBytes) {
+                throw IllegalArgumentException(
+                    "RGBA frame buffer size (${rgbaBytes.size}) is smaller than ${srcWidth}x$srcHeight*4 ($expectedBytes)"
+                )
+            }
+
+            val effectiveFrameIdx = if (frameIndex >= 0) frameIndex else framesEncodedCount
+            lastFrameIndex = effectiveFrameIdx
+
+            if (!useCpuFallback) {
+                val core = eglCore ?: throw IllegalStateException("EGLCore not initialized")
+                val winSurface = eglSurface ?: throw IllegalStateException("EGLSurface not initialized")
+                val prog = gpuProgram ?: throw IllegalStateException("GpuTextureProgram not initialized")
+
+                core.makeCurrent(winSurface)
+
+                var buf = directRgbaBuffer
+                if (buf == null || buf.capacity() < expectedBytes) {
+                    buf = ByteBuffer.allocateDirect(expectedBytes).order(ByteOrder.nativeOrder())
+                    directRgbaBuffer = buf
+                }
+                buf.clear()
+                buf.put(rgbaBytes, 0, expectedBytes)
+                buf.position(0)
+
+                GLES20.glViewport(0, 0, width, height)
+                GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+
+                val texId = textureIds[0]
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
+                GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1)
+                if (!textureInitialized || lastTexWidth != srcWidth || lastTexHeight != srcHeight) {
+                    GLES20.glTexImage2D(
+                        GLES20.GL_TEXTURE_2D,
+                        0,
+                        GLES20.GL_RGBA,
+                        srcWidth,
+                        srcHeight,
+                        0,
+                        GLES20.GL_RGBA,
+                        GLES20.GL_UNSIGNED_BYTE,
+                        buf
+                    )
+                    textureInitialized = true
+                    lastTexWidth = srcWidth
+                    lastTexHeight = srcHeight
+                } else {
+                    GLES20.glTexSubImage2D(
+                        GLES20.GL_TEXTURE_2D,
+                        0,
+                        0,
+                        0,
+                        srcWidth,
+                        srcHeight,
+                        GLES20.GL_RGBA,
+                        GLES20.GL_UNSIGNED_BYTE,
+                        buf
+                    )
+                }
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+
+                computeAspectRatioMvpMatrix(
+                    srcWidth = srcWidth,
+                    srcHeight = srcHeight,
+                    dstWidth = width,
+                    dstHeight = height,
+                    cropToFill = cropToFill,
+                    outMatrix = mvpMatrix
+                )
+                prog.draw(texId, mvpMatrix)
+
+                val ptsNs = (effectiveFrameIdx.toLong() * 1_000_000_000L) / targetFps.toLong()
+                core.setPresentationTime(winSurface, ptsNs)
+                core.swapBuffers(winSurface)
+
+                drainEncoder(endOfStream = false)
+            } else {
+                appendFrameCpuFallback(rgbaBytes, effectiveFrameIdx, srcWidth, srcHeight)
+            }
+
+            framesEncodedCount++
+        }
+
+        private fun appendFrameCpuFallback(
+            rgbaBytes: ByteArray,
+            frameIndex: Int,
+            srcWidth: Int,
+            srcHeight: Int
+        ) {
+            val enc = encoder ?: throw IllegalStateException("CPU encoder not initialized")
+            val argb = cpuArgbScratch ?: IntArray(width * height).also { cpuArgbScratch = it }
+
+            if (srcWidth == width && srcHeight == height) {
+                val pxCount = width * height
+                for (i in 0 until pxCount) {
+                    val base = i * 4
+                    val r = rgbaBytes[base].toInt() and 0xFF
+                    val g = rgbaBytes[base + 1].toInt() and 0xFF
+                    val b = rgbaBytes[base + 2].toInt() and 0xFF
+                    val a = rgbaBytes[base + 3].toInt() and 0xFF
+                    argb[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
+                }
+            } else {
+                val srcBitmap = Bitmap.createBitmap(srcWidth, srcHeight, Bitmap.Config.ARGB_8888)
+                srcBitmap.copyPixelsFromBuffer(ByteBuffer.wrap(rgbaBytes, 0, srcWidth * srcHeight * 4))
+                val scaled = scaleBitmapPreservingAspect(srcBitmap, width, height, cropToFill)
+                try {
+                    scaled.getPixels(argb, 0, width, 0, 0, width, height)
+                } finally {
+                    if (scaled !== srcBitmap) scaled.recycle()
+                    srcBitmap.recycle()
+                }
+            }
+
+            val ptsUs = (frameIndex.toLong() * 1_000_000L) / targetFps.toLong()
+            var queued = false
+            while (!queued) {
+                val inBufIdx = enc.dequeueInputBuffer(10_000L)
+                if (inBufIdx >= 0) {
+                    val inputImage = try {
+                        enc.getInputImage(inBufIdx)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (inputImage != null) {
+                        val bytesWritten = try {
+                            fillBt709Yuv420ImageFromArgb(argb, inputImage, width, height)
+                        } finally {
+                            inputImage.close()
+                        }
+                        val cap = enc.getInputBuffer(inBufIdx)?.capacity() ?: bytesWritten
+                        enc.queueInputBuffer(inBufIdx, 0, min(bytesWritten, cap), ptsUs, 0)
+                    } else {
+                        val inputBuffer = enc.getInputBuffer(inBufIdx)
+                            ?: throw IllegalStateException("Null inputBuffer at $inBufIdx")
+                        inputBuffer.clear()
+                        val bytesWritten = fillBt709Nv12BufferFromArgb(argb, inputBuffer, width, height)
+                        enc.queueInputBuffer(inBufIdx, 0, bytesWritten, ptsUs, 0)
+                    }
+                    queued = true
+                } else {
+                    drainEncoder(endOfStream = false)
+                }
+            }
+            drainEncoder(endOfStream = false)
+        }
+
+        private fun writeInterleavedAudioUpTo(maxPtsUs: Long) {
+            val mux = muxer ?: return
+            if (!muxerStarted || audioTrackIdx < 0) return
+            while (audioPacketCursor < audioPackets.size) {
+                val pkt = audioPackets[audioPacketCursor]
+                if (pkt.presentationTimeUs > maxPtsUs) break
+                audInfo.set(0, pkt.data.size, pkt.presentationTimeUs, pkt.flags)
+                mux.writeSampleData(audioTrackIdx, ByteBuffer.wrap(pkt.data), audInfo)
+                audioPacketCursor++
+            }
+        }
+
+        private fun drainEncoder(endOfStream: Boolean) {
+            val enc = encoder ?: return
+            val mux = muxer ?: return
+
+            if (endOfStream) {
+                if (!useCpuFallback) {
+                    enc.signalEndOfInputStream()
+                } else {
+                    val eosPtsUs = ((lastFrameIndex + 1).toLong() * 1_000_000L) / targetFps.toLong()
+                    var queuedEos = false
+                    var attempts = 0
+                    while (!queuedEos && attempts < 100) {
+                        val inIdx = enc.dequeueInputBuffer(10_000L)
+                        if (inIdx >= 0) {
+                            enc.queueInputBuffer(
+                                inIdx,
+                                0,
+                                0,
+                                eosPtsUs,
+                                MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                            )
+                            queuedEos = true
+                        } else {
+                            attempts++
+                        }
+                    }
+                }
+            }
+
+            var eosTryAgainCount = 0
+            val maxEosRetries = 200
+            while (true) {
+                val outStatus = enc.dequeueOutputBuffer(bufferInfo, if (endOfStream) 10_000L else 0L)
+                when {
+                    outStatus == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                        if (!endOfStream) return
+                        eosTryAgainCount++
+                        if (eosTryAgainCount > maxEosRetries) {
+                            break
+                        }
+                    }
+                    outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        if (muxerStarted) throw IllegalStateException("Output format changed twice")
+                        videoTrackIdx = mux.addTrack(enc.outputFormat)
+                        val af = audioFormat
+                        if (af != null && audioPackets.isNotEmpty()) {
+                            audioTrackIdx = mux.addTrack(af)
+                        }
+                        mux.start()
+                        muxerStarted = true
+                    }
+                    outStatus >= 0 -> {
+                        eosTryAgainCount = 0
+                        val outBuf = enc.getOutputBuffer(outStatus)
+                        if (outBuf != null &&
+                            bufferInfo.size > 0 &&
+                            (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
+                        ) {
+                            if (!muxerStarted) {
+                                videoTrackIdx = mux.addTrack(enc.outputFormat)
+                                val af = audioFormat
+                                if (af != null && audioPackets.isNotEmpty()) {
+                                    audioTrackIdx = mux.addTrack(af)
+                                }
+                                mux.start()
+                                muxerStarted = true
+                            }
+                            outBuf.position(bufferInfo.offset)
+                            outBuf.limit(bufferInfo.offset + bufferInfo.size)
+                            mux.writeSampleData(videoTrackIdx, outBuf, bufferInfo)
+                            writeInterleavedAudioUpTo(bufferInfo.presentationTimeUs)
+                        }
+                        enc.releaseOutputBuffer(outStatus, false)
+                        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            return
+                        }
+                    }
+                }
+            }
+        }
+
+        fun finish(): File {
+            if (closed) return outputMp4File
+            try {
+                if (framesEncodedCount <= 0) {
+                    throw IllegalStateException("No frames were appended to the direct MP4 session")
+                }
+                drainEncoder(endOfStream = true)
+                writeInterleavedAudioUpTo(Long.MAX_VALUE)
+            } finally {
+                releaseAll()
+            }
+
+            verifyExportedMp4WithRetriever(
+                mp4File = outputMp4File,
+                expectedWidth = width,
+                expectedHeight = height
+            )
+            return outputMp4File
+        }
+
+        fun abort() {
+            releaseAll()
+            try {
+                if (outputMp4File.exists()) {
+                    outputMp4File.delete()
+                }
+            } catch (_: Exception) {}
+        }
+
+        private fun releaseGpuResourcesOnly() {
+            try {
+                if (textureIds[0] != 0) {
+                    GLES20.glDeleteTextures(1, textureIds, 0)
+                    textureIds[0] = 0
+                }
+            } catch (_: Exception) {}
+            try { gpuProgram?.release() } catch (_: Exception) {}
+            gpuProgram = null
+            try {
+                val core = eglCore
+                val surf = eglSurface
+                if (core != null && surf != null) {
+                    core.releaseSurface(surf)
+                }
+            } catch (_: Exception) {}
+            eglSurface = null
+            try { eglCore?.release() } catch (_: Exception) {}
+            eglCore = null
+            try { inputSurface?.release() } catch (_: Exception) {}
+            inputSurface = null
+            if (encoderStarted) {
+                try { encoder?.stop() } catch (_: Exception) {}
+            }
+            try { encoder?.release() } catch (_: Exception) {}
+            encoder = null
+            encoderStarted = false
+            try { muxer?.release() } catch (_: Exception) {}
+            muxer = null
+            muxerStarted = false
+        }
+
+        private fun releaseAll() {
+            if (closed) return
+            closed = true
+            try {
+                if (textureIds[0] != 0) {
+                    GLES20.glDeleteTextures(1, textureIds, 0)
+                    textureIds[0] = 0
+                }
+            } catch (_: Exception) {}
+            try { gpuProgram?.release() } catch (_: Exception) {}
+            gpuProgram = null
+            try {
+                val core = eglCore
+                val surf = eglSurface
+                if (core != null && surf != null) {
+                    core.releaseSurface(surf)
+                }
+            } catch (_: Exception) {}
+            eglSurface = null
+            try { eglCore?.release() } catch (_: Exception) {}
+            eglCore = null
+            try { inputSurface?.release() } catch (_: Exception) {}
+            inputSurface = null
+
+            if (encoderStarted) {
+                try { encoder?.stop() } catch (_: Exception) {}
+            }
+            try { encoder?.release() } catch (_: Exception) {}
+            encoder = null
+
+            if (muxerStarted) {
+                try { muxer?.stop() } catch (_: Exception) {}
+            }
+            try { muxer?.release() } catch (_: Exception) {}
+            muxer = null
+            directRgbaBuffer = null
+            cpuArgbScratch = null
+        }
+    }
+
     // ─── Hardware H.264 / HEVC (.mp4) + AAC Audio Transcoder & Muxer ───────────
 
     private fun transcodeAviToMp4WithAudio(
@@ -324,32 +1054,25 @@ class MainActivity : FlutterFragmentActivity() {
         requestedCodecMime: String = MediaFormat.MIMETYPE_VIDEO_AVC,
         requestedBitrateBps: Int = 14_000_000,
         allowCodecFallback: Boolean = false,
-        useGpuSurface: Boolean = true
+        useGpuSurface: Boolean = true,
+        cropToFill: Boolean = false
     ): File {
         val aviFile = File(aviPath)
         if (!aviFile.exists() || aviFile.length() < 32L) {
             throw IllegalArgumentException("AVI file is missing or corrupt: $aviPath")
         }
 
-        // فهرسة مواقع إطارات PNG داخل حاوية AVI بدون تحميل الملف كاملًا في الذاكرة (VID-003 / VID-009)
         val frameLocations = indexPngFramesInAvi(aviFile)
         if (frameLocations.isEmpty()) {
             throw IllegalStateException("No valid PNG frames (00dc) found in AVI container")
         }
 
-        // التحقق من الأبعاد الزوجية المتوافقة مع YUV420 و MediaCodec (VID-011 / VID-017)
-        val isFullHd = max(requestedWidth, requestedHeight) >= 1400 || min(requestedWidth, requestedHeight) >= 1000
         val aspect = requestedWidth.toDouble() / max(1, requestedHeight).toDouble()
-        val (encWidth, encHeight) = when {
-            aspect < 0.8 -> if (isFullHd) Pair(1080, 1920) else Pair(720, 1280)   // 9:16 Portrait
-            aspect > 1.2 -> if (isFullHd) Pair(1920, 1080) else Pair(1280, 720)   // 16:9 Landscape
-            else -> if (isFullHd) Pair(1080, 1080) else Pair(720, 720)            // 1:1 Square
-        }
+        val (encWidth, encHeight) = resolveEncoderDimensions(requestedWidth, requestedHeight)
         if (encWidth % 2 != 0 || encHeight % 2 != 0) {
             throw IllegalArgumentException("Encoder dimensions must be even: ${encWidth}x$encHeight")
         }
 
-        // حساب معدل الإطارات المستهدف بدقة بدون مضاعفة خاطئة تحول 20->30 إلى 40 FPS (VID-002)
         val safeSourceFps = max(1, sourceFps)
         val targetFps = requestedTargetFps.coerceIn(15, 60)
         val totalOutputFrames = max(
@@ -364,20 +1087,17 @@ class MainActivity : FlutterFragmentActivity() {
             MediaFormat.MIMETYPE_VIDEO_AVC
         }
 
-        // التحقق الصريح من دعم الجهاز لـ HEVC أو الإعداد المختار دون تحويل صامت إلى H.264 (VID-017)
         if (!allowCodecFallback && !isEncoderSupported(normalizedMime, encWidth, encHeight, targetFps, requestedBitrateBps)) {
             throw IllegalStateException(
                 "الجهاز لا يدعم ترميز $normalizedMime بدقة ${encWidth}x$encHeight ومعدل $targetFps FPS."
             )
         }
 
-        // 1. ترميز الصوت أولاً (حجم بياناته صغير ومحدود) لتجهيز مسار الصوت في MediaMuxer
         var audioFormat: MediaFormat? = null
         var audioPackets: List<EncodedPacket> = emptyList()
         if (!processedPcmPath.isNullOrBlank() && File(processedPcmPath).exists()) {
             val pcmFile = File(processedPcmPath)
             if (pcmFile.length() > 0L) {
-                // ترميز الصوت بالتدفق في دفعات مجزأة (16 KB) بدون تحميل الملف كاملاً في الذاكرة (Item 3)
                 val encoded = encodePcmFileStreamToAac(
                     pcmFile = pcmFile,
                     sampleRate = pcmSampleRate,
@@ -401,7 +1121,6 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
-        // 2. ترميز الفيديو وتدفقه مباشرة إلى MediaMuxer إطاراً بإطار دون تخزين حزم الفيديو في الذاكرة (VID-003 / VID-006)
         val outFile = File(outputMp4Path)
         if (outFile.exists()) outFile.delete()
 
@@ -420,10 +1139,10 @@ class MainActivity : FlutterFragmentActivity() {
                         codecMime = normalizedMime,
                         bitrateBps = requestedBitrateBps,
                         audioFormat = audioFormat,
-                        audioPackets = audioPackets
+                        audioPackets = audioPackets,
+                        cropToFill = cropToFill
                     )
-                } catch (gpuEx: Exception) {
-                    // في حال تعثر EGL على جهاز محدد، الانتقال التلقائي لمسار CPU Buffer الآمن (VID-003 / GPU Fallback)
+                } catch (_: Exception) {
                     if (outFile.exists()) outFile.delete()
                     streamEncodeFramesAndMuxToMp4(
                         aviFile = aviFile,
@@ -437,7 +1156,8 @@ class MainActivity : FlutterFragmentActivity() {
                         codecMime = normalizedMime,
                         bitrateBps = requestedBitrateBps,
                         audioFormat = audioFormat,
-                        audioPackets = audioPackets
+                        audioPackets = audioPackets,
+                        cropToFill = cropToFill
                     )
                 }
             } else {
@@ -453,7 +1173,8 @@ class MainActivity : FlutterFragmentActivity() {
                     codecMime = normalizedMime,
                     bitrateBps = requestedBitrateBps,
                     audioFormat = audioFormat,
-                    audioPackets = audioPackets
+                    audioPackets = audioPackets,
+                    cropToFill = cropToFill
                 )
             }
         } catch (e: Exception) {
@@ -464,7 +1185,6 @@ class MainActivity : FlutterFragmentActivity() {
                     e
                 )
             }
-            // وضع التوافق الاختياري فقط إذا طُلب صراحة (`allowCodecFallback == true`)
             val fallbackW = if (aspect < 0.8) 720 else if (aspect > 1.2) 1280 else 720
             val fallbackH = if (aspect < 0.8) 1280 else if (aspect > 1.2) 720 else 720
             streamEncodeFramesAndMuxToMp4(
@@ -479,11 +1199,11 @@ class MainActivity : FlutterFragmentActivity() {
                 codecMime = MediaFormat.MIMETYPE_VIDEO_AVC,
                 bitrateBps = 8_000_000,
                 audioFormat = audioFormat,
-                audioPackets = audioPackets
+                audioPackets = audioPackets,
+                cropToFill = cropToFill
             )
         }
 
-        // 3. الفحص الذاتي الصارم (Oracle Verification) عبر MediaMetadataRetriever للتأكد من سلامة ملف الـ MP4 (VID-018)
         verifyExportedMp4WithRetriever(
             mp4File = outFile,
             expectedWidth = encWidth,
@@ -527,7 +1247,7 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /// فهرسة مواقع إطارات PNG (`00dc`) داخل حاوية RIFF/AVI عبر `RandomAccessFile` بدون قراءة الملف كاملًا في الذاكرة (VID-003 / VID-009)
+    /// فهرسة مواقع إطارات PNG (`00dc`) داخل حاوية RIFF/AVI عبر `RandomAccessFile` بدون قراءة الملف كاملًا في الذاكرة
     private fun indexPngFramesInAvi(aviFile: File): List<AviFrameLocation> {
         val fileLen = aviFile.length()
         if (fileLen < 32L) return emptyList()
@@ -537,7 +1257,6 @@ class MainActivity : FlutterFragmentActivity() {
             val header = ByteArray(12)
             if (raf.read(header) != 12) return emptyList()
 
-            // التحقق الصارم من توقيع "RIFF" و "AVI " (VID-009)
             if (header[0] != 0x52.toByte() ||
                 header[1] != 0x49.toByte() ||
                 header[2] != 0x46.toByte() ||
@@ -577,10 +1296,8 @@ class MainActivity : FlutterFragmentActivity() {
 
                 if (dataEnd > containerEnd) break
 
-                // فحص قوائم LIST ("LIST" = 0x4C, 0x49, 0x53, 0x54)
                 if (c0 == 0x4C && c1 == 0x49 && c2 == 0x53 && c3 == 0x54 && chunkSize >= 4L) {
                     if (raf.read(listTypeBuf) != 4) break
-                    // الدخول فقط داخل قائمة "movi" (0x6D, 0x6F, 0x76, 0x69)
                     if (listTypeBuf[0] == 0x6D.toByte() &&
                         listTypeBuf[1] == 0x6F.toByte() &&
                         listTypeBuf[2] == 0x76.toByte() &&
@@ -615,7 +1332,6 @@ class MainActivity : FlutterFragmentActivity() {
                             } else if (mc0 == 0x30 && mc1 == 0x30 && mc2 == 0x64 && mc3 == 0x63 &&
                                 mSize >= 8L && mSize <= 32L * 1024L * 1024L
                             ) {
-                                // التحقق من توقيع PNG القياسي في بداية مقطع 00dc (VID-009)
                                 if (raf.read(pngSigBuf) == 8 && pngSigBuf.contentEquals(PNG_MAGIC)) {
                                     locations.add(AviFrameLocation(offset = mStart, size = mSize.toInt()))
                                 }
@@ -638,7 +1354,7 @@ class MainActivity : FlutterFragmentActivity() {
         return locations
     }
 
-    /// ترميز الإطارات وتدفقها مباشرة إلى `MediaMuxer` دون تخزين جميع الإطارات أو حزم الفيديو في الذاكرة (VID-003 / VID-006)
+    /// ترميز الإطارات عبر مسار CPU مع الحفاظ على نسبة الأبعاد والكتابة المتداخلة للصوت والفيديو
     private fun streamEncodeFramesAndMuxToMp4(
         aviFile: File,
         frameLocations: List<AviFrameLocation>,
@@ -651,7 +1367,8 @@ class MainActivity : FlutterFragmentActivity() {
         codecMime: String,
         bitrateBps: Int,
         audioFormat: MediaFormat?,
-        audioPackets: List<EncodedPacket>
+        audioPackets: List<EncodedPacket>,
+        cropToFill: Boolean = false
     ) {
         if (width <= 0 || height <= 0 || width % 2 != 0 || height % 2 != 0) {
             throw IllegalArgumentException("Video dimensions must be positive even integers: ${width}x$height")
@@ -676,6 +1393,19 @@ class MainActivity : FlutterFragmentActivity() {
         var muxerStarted = false
         var videoTrackIdx = -1
         var audioTrackIdx = -1
+        var audioPacketCursor = 0
+        val audInfo = MediaCodec.BufferInfo()
+
+        fun writeInterleavedAudioUpTo(maxPtsUs: Long) {
+            if (!muxerStarted || audioTrackIdx < 0) return
+            while (audioPacketCursor < audioPackets.size) {
+                val pkt = audioPackets[audioPacketCursor]
+                if (pkt.presentationTimeUs > maxPtsUs) break
+                audInfo.set(0, pkt.data.size, pkt.presentationTimeUs, pkt.flags)
+                muxer.writeSampleData(audioTrackIdx, ByteBuffer.wrap(pkt.data), audInfo)
+                audioPacketCursor++
+            }
+        }
 
         try {
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
@@ -706,7 +1436,6 @@ class MainActivity : FlutterFragmentActivity() {
                                 )
                                 inputDone = true
                             } else {
-                                // حساب فهرس الإطار المصدر من الزمن الفعلي للإطار المستهدف دون مضاعفة تشوه التوقيت (VID-002)
                                 val srcIdx = ((outFrameIndex.toLong() * sourceFps.toLong()) / targetFps.toLong())
                                     .toInt()
                                     .coerceIn(0, frameLocations.size - 1)
@@ -720,11 +1449,12 @@ class MainActivity : FlutterFragmentActivity() {
                                     val rawBitmap = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.size)
                                         ?: throw IllegalStateException("Failed to decode PNG frame at index $srcIdx")
                                     try {
-                                        val scaledBitmap = if (rawBitmap.width == width && rawBitmap.height == height) {
-                                            rawBitmap
-                                        } else {
-                                            Bitmap.createScaledBitmap(rawBitmap, width, height, true)
-                                        }
+                                        val scaledBitmap = scaleBitmapPreservingAspect(
+                                            src = rawBitmap,
+                                            dstWidth = width,
+                                            dstHeight = height,
+                                            cropToFill = cropToFill
+                                        )
                                         try {
                                             scaledBitmap.getPixels(argbPixels, 0, width, 0, 0, width, height)
                                         } finally {
@@ -740,7 +1470,6 @@ class MainActivity : FlutterFragmentActivity() {
 
                                 val ptsUs = (outFrameIndex.toLong() * 1_000_000L) / targetFps.toLong()
 
-                                // احترام عقد MediaCodec الصحيح بين getInputImage و getInputBuffer (VID-006)
                                 val inputImage = try {
                                     encoder.getInputImage(inBufIdx)
                                 } catch (_: Exception) {
@@ -748,9 +1477,8 @@ class MainActivity : FlutterFragmentActivity() {
                                 }
 
                                 if (inputImage != null) {
-                                    val bytesWritten: Int
-                                    try {
-                                        bytesWritten = fillBt709Yuv420ImageFromArgb(
+                                    val bytesWritten = try {
+                                        fillBt709Yuv420ImageFromArgb(
                                             argb = argbPixels,
                                             image = inputImage,
                                             width = width,
@@ -759,7 +1487,8 @@ class MainActivity : FlutterFragmentActivity() {
                                     } finally {
                                         inputImage.close()
                                     }
-                                    encoder.queueInputBuffer(inBufIdx, 0, bytesWritten, ptsUs, 0)
+                                    val inputCap = encoder.getInputBuffer(inBufIdx)?.capacity() ?: bytesWritten
+                                    encoder.queueInputBuffer(inBufIdx, 0, min(bytesWritten, inputCap), ptsUs, 0)
                                 } else {
                                     val inputBuffer = encoder.getInputBuffer(inBufIdx)
                                         ?: throw IllegalStateException("MediaCodec returned null inputBuffer for index $inBufIdx")
@@ -811,6 +1540,7 @@ class MainActivity : FlutterFragmentActivity() {
                                 outBuf.position(bufferInfo.offset)
                                 outBuf.limit(bufferInfo.offset + bufferInfo.size)
                                 muxer.writeSampleData(videoTrackIdx, outBuf, bufferInfo)
+                                writeInterleavedAudioUpTo(bufferInfo.presentationTimeUs)
                             }
                             encoder.releaseOutputBuffer(outStatus, false)
                             if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
@@ -821,13 +1551,8 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
 
-            if (muxerStarted && audioTrackIdx >= 0) {
-                val audInfo = MediaCodec.BufferInfo()
-                for (pkt in audioPackets) {
-                    audInfo.set(0, pkt.data.size, pkt.presentationTimeUs, pkt.flags)
-                    muxer.writeSampleData(audioTrackIdx, ByteBuffer.wrap(pkt.data), audInfo)
-                }
-            }
+            // كتابة أي حزم صوت متبقية بعد آخر إطار فيديو
+            writeInterleavedAudioUpTo(Long.MAX_VALUE)
         } finally {
             if (encoderStarted) {
                 try {
@@ -850,7 +1575,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /// تحويل ARGB إلى ITU-R BT.709 Studio-Swing YUV420 مع فلتر 2x2 Box-Filter للكروما
-    /// وإرجاع عدد البايتات الصالحة المكتوبة فعلياً بما لا يتجاوز سعة المخزن (VID-006 / VID-011)
+    /// وإرجاع مدى البايتات الفعلي شاملاً محاذاة الأسطر (`yRowStride > width`) لمنع اقتطاع قنوات الألوان
     private fun fillBt709Yuv420ImageFromArgb(
         argb: IntArray,
         image: android.media.Image,
@@ -875,7 +1600,6 @@ class MainActivity : FlutterFragmentActivity() {
         val vCap = vBuf.capacity()
 
         var maxYWritten = 0
-        // 1. Luma (Y) بمعاملات ITU-R BT.709 Studio-Swing
         for (y in 0 until height) {
             val rowOffset = y * width
             val yRowOffset = y * yRowStride
@@ -894,7 +1618,6 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
-        // 2. Chroma (Cb/Cr) عبر متوسط مربع 2x2 بكسل بمعاملات ITU-R BT.709
         var maxUWritten = 0
         var maxVWritten = 0
         val halfH = height / 2
@@ -941,10 +1664,9 @@ class MainActivity : FlutterFragmentActivity() {
 
         val logicalYuvSize = (width * height * 3) / 2
         val actualPlaneSpan = maxYWritten + max(maxUWritten, maxVWritten)
-        return min(logicalYuvSize, max(1, actualPlaneSpan))
+        return max(logicalYuvSize, actualPlaneSpan)
     }
 
-    /// تحويل ARGB إلى NV12 وكتابتها في `ByteBuffer` مع إرجاع عدد البايتات الصالحة المكتوبة فعلياً (VID-006 / VID-011)
     private fun fillBt709Nv12BufferFromArgb(
         argb: IntArray,
         buffer: ByteBuffer,
@@ -1044,19 +1766,19 @@ class MainActivity : FlutterFragmentActivity() {
             extractor.seekTo(startOffsetUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
         }
 
-        val sampleRate = if (inputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+        var sampleRate = if (inputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
             inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
         } else {
             44100
         }
-        val channelCount = if (inputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+        var channelCount = if (inputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
             inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceIn(1, 2)
         } else {
             2
         }
 
-        val bytesPerSecond = sampleRate * channelCount * 2
-        val targetTotalPcmBytes = ((totalDurationUs * bytesPerSecond.toLong()) / 1_000_000L).toInt()
+        var bytesPerSecond = sampleRate * channelCount * 2
+        var targetTotalPcmBytes = ((totalDurationUs * bytesPerSecond.toLong()) / 1_000_000L).toInt()
         if (targetTotalPcmBytes <= 0) {
             extractor.release()
             return null
@@ -1072,6 +1794,10 @@ class MainActivity : FlutterFragmentActivity() {
         var decoderDone = false
         var extractorEOS = false
 
+        // الحفاظ على طوابع زمنية متصاعدة (Monotonic PTS) عند تكرار المقطع الصوتي
+        var loopTimeOffsetUs = 0L
+        var maxSeenPtsUs = 0L
+
         try {
             while (!decoderDone && pcmOut.size() < targetTotalPcmBytes) {
                 if (!extractorEOS) {
@@ -1082,6 +1808,7 @@ class MainActivity : FlutterFragmentActivity() {
                         val sampleSize = extractor.readSampleData(inBuf, 0)
                         if (sampleSize < 0) {
                             if (loopIfShorter) {
+                                loopTimeOffsetUs = maxSeenPtsUs + 23_220L
                                 extractor.seekTo(0L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
                                 val retrySize = extractor.readSampleData(inBuf, 0)
                                 if (retrySize < 0) {
@@ -1089,12 +1816,15 @@ class MainActivity : FlutterFragmentActivity() {
                                         inIdx,
                                         0,
                                         0,
-                                        0L,
+                                        maxSeenPtsUs,
                                         MediaCodec.BUFFER_FLAG_END_OF_STREAM
                                     )
                                     extractorEOS = true
                                 } else {
-                                    decoder.queueInputBuffer(inIdx, 0, retrySize, extractor.sampleTime, 0)
+                                    val rawPts = max(0L, extractor.sampleTime)
+                                    val monotonicPts = loopTimeOffsetUs + rawPts
+                                    if (monotonicPts > maxSeenPtsUs) maxSeenPtsUs = monotonicPts
+                                    decoder.queueInputBuffer(inIdx, 0, retrySize, monotonicPts, 0)
                                     extractor.advance()
                                 }
                             } else {
@@ -1102,35 +1832,54 @@ class MainActivity : FlutterFragmentActivity() {
                                     inIdx,
                                     0,
                                     0,
-                                    0L,
+                                    maxSeenPtsUs,
                                     MediaCodec.BUFFER_FLAG_END_OF_STREAM
                                 )
                                 extractorEOS = true
                             }
                         } else {
-                            decoder.queueInputBuffer(inIdx, 0, sampleSize, extractor.sampleTime, 0)
+                            val rawPts = max(0L, extractor.sampleTime)
+                            val monotonicPts = loopTimeOffsetUs + rawPts
+                            if (monotonicPts > maxSeenPtsUs) maxSeenPtsUs = monotonicPts
+                            decoder.queueInputBuffer(inIdx, 0, sampleSize, monotonicPts, 0)
                             extractor.advance()
                         }
                     }
                 }
 
                 val outStatus = decoder.dequeueOutputBuffer(decInfo, 10_000)
-                if (outStatus >= 0) {
-                    val outBuf = decoder.getOutputBuffer(outStatus)
-                    if (outBuf != null && decInfo.size > 0) {
-                        outBuf.position(decInfo.offset)
-                        outBuf.limit(decInfo.offset + decInfo.size)
-                        val chunk = ByteArray(decInfo.size)
-                        outBuf.get(chunk)
-                        val needed = targetTotalPcmBytes - pcmOut.size()
-                        pcmOut.write(chunk, 0, min(chunk.size, needed))
+                when {
+                    outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        val actualFmt = decoder.outputFormat
+                        if (actualFmt.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                            sampleRate = actualFmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                        }
+                        if (actualFmt.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                            channelCount = actualFmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceIn(1, 2)
+                        }
+                        bytesPerSecond = sampleRate * channelCount * 2
+                        targetTotalPcmBytes = ((totalDurationUs * bytesPerSecond.toLong()) / 1_000_000L).toInt()
                     }
-                    decoder.releaseOutputBuffer(outStatus, false)
-                    if ((decInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                        decoderDone = true
+                    outStatus >= 0 -> {
+                        val outBuf = decoder.getOutputBuffer(outStatus)
+                        if (outBuf != null && decInfo.size > 0) {
+                            outBuf.position(decInfo.offset)
+                            outBuf.limit(decInfo.offset + decInfo.size)
+                            val chunk = ByteArray(decInfo.size)
+                            outBuf.get(chunk)
+                            val needed = targetTotalPcmBytes - pcmOut.size()
+                            if (needed > 0) {
+                                pcmOut.write(chunk, 0, min(chunk.size, needed))
+                            }
+                        }
+                        decoder.releaseOutputBuffer(outStatus, false)
+                        if ((decInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            decoderDone = true
+                        }
                     }
-                } else if (outStatus == MediaCodec.INFO_TRY_AGAIN_LATER && extractorEOS) {
-                    break
+                    outStatus == MediaCodec.INFO_TRY_AGAIN_LATER && extractorEOS -> {
+                        break
+                    }
                 }
             }
         } finally {
@@ -1175,8 +1924,7 @@ class MainActivity : FlutterFragmentActivity() {
         return encodeRawPcm16ToAac(rawPcmBytes, sampleRate, channelCount)
     }
 
-
-    /// ترميز تيار ملف PCM 16-bit إلى AAC بدفعات تدفقية 16 كيلوبايت دون قراءة الملف كاملاً في RAM (Item 3)
+    /// ترميز تيار ملف PCM 16-bit إلى AAC بدفعات تدفقية 16 كيلوبايت دون قراءة الملف كاملاً في RAM
     private fun encodePcmFileStreamToAac(
         pcmFile: File,
         sampleRate: Int,
@@ -1373,8 +2121,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /// حساب التلاشي (Fade-In / Fade-Out) ومستوى الصوت ومحدد الذروة بدقة الإطار الصوتي (Audio Frame)
-    /// بحيث يتطابق سلوك Stereo و Mono تماماً مع تنفيذ Rust دون انحراف بين القناتين L و R (VID-001)
     private fun applyVolumeAndFadesToPcm16(
         pcmBytes: ByteArray,
         sampleRate: Int,
@@ -1439,7 +2185,6 @@ class MainActivity : FlutterFragmentActivity() {
 
     // ─── Container MIME Inspection, Save & Share (VID-008) ─────────────────────
 
-    /// فحص التوقيع الثنائي للحاوية لتحديد نوع MIME الفعلي بدقة دون الاعتماد الأعمى على الامتداد (VID-008)
     private fun detectContainerMimeType(file: File): String {
         try {
             if (file.exists() && file.length() >= 12L) {
@@ -1471,6 +2216,32 @@ class MainActivity : FlutterFragmentActivity() {
         return if (file.extension.lowercase() == "avi") "video/x-msvideo" else "video/mp4"
     }
 
+    private fun findExistingDownloadUri(fileName: String, expectedSizeBytes: Long): Uri? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return try {
+            val resolver = applicationContext.contentResolver
+            val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            val projection = arrayOf(
+                MediaStore.MediaColumns._ID,
+                MediaStore.MediaColumns.SIZE
+            )
+            val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
+            val selectionArgs = arrayOf(fileName)
+            resolver.query(collection, projection, selection, selectionArgs, null)?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    val size = cursor.getLong(1)
+                    if (size == expectedSizeBytes && size > 0L) {
+                        return ContentUris.withAppendedId(collection, id)
+                    }
+                }
+            }
+            null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun saveFileToDownloadsAndGallery(
         sourcePath: String,
         fileName: String,
@@ -1494,7 +2265,6 @@ class MainActivity : FlutterFragmentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val resolver = applicationContext.contentResolver
 
-            // 1. التسجيل في معرض الفيديو (Movies/OurLoveStory) بنوع MIME الفعلي للحاوية (VID-008)
             if (actualMime.startsWith("video/")) {
                 try {
                     val videoValues = ContentValues().apply {
@@ -1523,30 +2293,32 @@ class MainActivity : FlutterFragmentActivity() {
                 } catch (_: Exception) {}
             }
 
-            // 2. التسجيل في مجلد التنزيلات العام (Download/OurLoveStory)
-            val downloadValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, normalizedFileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, actualMime)
-                put(
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                    "${Environment.DIRECTORY_DOWNLOADS}/$subFolder"
-                )
-                put(MediaStore.MediaColumns.IS_PENDING, 1)
-            }
-
-            val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            val itemUri = resolver.insert(collection, downloadValues)
-                ?: throw IllegalStateException("Failed to create MediaStore entry")
-
-            resolver.openOutputStream(itemUri)?.use { outStream ->
-                FileInputStream(srcFile).use { inStream ->
-                    inStream.copyTo(outStream, bufferSize = 64 * 1024)
+            val existingUri = findExistingDownloadUri(normalizedFileName, srcFile.length())
+            if (existingUri == null) {
+                val downloadValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, normalizedFileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, actualMime)
+                    put(
+                        MediaStore.MediaColumns.RELATIVE_PATH,
+                        "${Environment.DIRECTORY_DOWNLOADS}/$subFolder"
+                    )
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
-            }
 
-            downloadValues.clear()
-            downloadValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
-            resolver.update(itemUri, downloadValues, null, null)
+                val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                val itemUri = resolver.insert(collection, downloadValues)
+                    ?: throw IllegalStateException("Failed to create MediaStore entry")
+
+                resolver.openOutputStream(itemUri)?.use { outStream ->
+                    FileInputStream(srcFile).use { inStream ->
+                        inStream.copyTo(outStream, bufferSize = 64 * 1024)
+                    }
+                }
+
+                downloadValues.clear()
+                downloadValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                resolver.update(itemUri, downloadValues, null, null)
+            }
 
             return "/storage/emulated/0/${Environment.DIRECTORY_DOWNLOADS}/$subFolder/$normalizedFileName"
         } else {
@@ -1579,40 +2351,44 @@ class MainActivity : FlutterFragmentActivity() {
             throw IllegalArgumentException("Cannot share non-existent or empty video file: $filePath")
         }
 
-        // تحديد نوع MIME الفعلي من ترويسة الحاوية (MP4 سواء كان H.264 أو HEVC -> video/mp4، و AVI -> video/x-msvideo) (VID-008)
         val actualMime = detectContainerMimeType(srcFile)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val resolver = applicationContext.contentResolver
-            val values = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, srcFile.name)
-                put(MediaStore.MediaColumns.MIME_TYPE, actualMime)
-                put(
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                    "${Environment.DIRECTORY_DOWNLOADS}/OurLoveStory"
-                )
-                put(MediaStore.MediaColumns.IS_PENDING, 1)
-            }
-            val uri = resolver.insert(
-                MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
-                values
-            ) ?: throw IllegalStateException("Failed to create shareable MediaStore URI")
+            // البحث أولاً عن الـ Uri الموجود في MediaStore لمنع تكرار نسخ الفيديو عند كل مشاركة
+            var uri = findExistingDownloadUri(srcFile.name, srcFile.length())
+            if (uri == null) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, srcFile.name)
+                    put(MediaStore.MediaColumns.MIME_TYPE, actualMime)
+                    put(
+                        MediaStore.MediaColumns.RELATIVE_PATH,
+                        "${Environment.DIRECTORY_DOWNLOADS}/OurLoveStory"
+                    )
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val insertedUri = resolver.insert(
+                    MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+                    values
+                ) ?: throw IllegalStateException("Failed to create shareable MediaStore URI")
 
-            try {
-                resolver.openOutputStream(uri)?.use { out ->
-                    FileInputStream(srcFile).use { input ->
-                        input.copyTo(out, bufferSize = 64 * 1024)
-                    }
-                } ?: throw IllegalStateException("Failed to open output stream for share URI")
-
-                values.clear()
-                values.put(MediaStore.MediaColumns.IS_PENDING, 0)
-                resolver.update(uri, values, null, null)
-            } catch (e: Exception) {
                 try {
-                    resolver.delete(uri, null, null)
-                } catch (_: Exception) {}
-                throw e
+                    resolver.openOutputStream(insertedUri)?.use { out ->
+                        FileInputStream(srcFile).use { input ->
+                            input.copyTo(out, bufferSize = 64 * 1024)
+                        }
+                    } ?: throw IllegalStateException("Failed to open output stream for share URI")
+
+                    values.clear()
+                    values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    resolver.update(insertedUri, values, null, null)
+                    uri = insertedUri
+                } catch (e: Exception) {
+                    try {
+                        resolver.delete(insertedUri, null, null)
+                    } catch (_: Exception) {}
+                    throw e
+                }
             }
 
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -1623,7 +2399,6 @@ class MainActivity : FlutterFragmentActivity() {
             }
             startActivity(Intent.createChooser(shareIntent, title))
         } else {
-            // دعم إصدارات أندرويد الأقدم من Android 10 (API < 29) عبر MediaStore.Video
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.TITLE, title)
                 put(MediaStore.Video.Media.DISPLAY_NAME, srcFile.name)
@@ -1731,7 +2506,6 @@ class MainActivity : FlutterFragmentActivity() {
             val numConfigs = IntArray(1)
             EGL14.eglChooseConfig(eglDisplay, attribList, 0, configs, 0, configs.size, numConfigs, 0)
             if (numConfigs[0] <= 0 || configs[0] == null) {
-                // بديل بدون EGL_RECORDABLE_ANDROID للأجهزة القديمة
                 val fallbackAttribs = intArrayOf(
                     EGL14.EGL_RED_SIZE, 8,
                     EGL14.EGL_GREEN_SIZE, 8,
@@ -1767,10 +2541,6 @@ class MainActivity : FlutterFragmentActivity() {
             if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) {
                 throw RuntimeException("eglMakeCurrent failed")
             }
-        }
-
-        fun makeNothingCurrent() {
-            EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
         }
 
         fun swapBuffers(eglSurface: EGLSurface): Boolean {
@@ -1864,6 +2634,10 @@ class MainActivity : FlutterFragmentActivity() {
             GLES20.glAttachShader(programHandle, fShader)
             GLES20.glLinkProgram(programHandle)
 
+            // تحرير مقابض الشيدرز المؤقتة فور الربط لمنع تسريب موارد GPU
+            GLES20.glDeleteShader(vShader)
+            GLES20.glDeleteShader(fShader)
+
             val linkStatus = IntArray(1)
             GLES20.glGetProgramiv(programHandle, GLES20.GL_LINK_STATUS, linkStatus, 0)
             if (linkStatus[0] != GLES20.GL_TRUE) {
@@ -1923,8 +2697,7 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /// مسار التصدير العتادي فائق السرعة عبر سطح الرسوميات (Zero-Copy GPU Surface Pipeline)
-    /// يرسم الإطارات عبر OpenGL ES مباشرة على سطح إدخال المشفر `MediaCodec.createInputSurface()`
+    /// مسار التصدير العتادي عبر سطح الرسوميات (GPU Surface Pipeline) مع تداخل الصوت والفيديو وحماية EOS
     private fun streamEncodeFramesWithGpuSurfaceAndMuxToMp4(
         aviFile: File,
         frameLocations: List<AviFrameLocation>,
@@ -1937,7 +2710,8 @@ class MainActivity : FlutterFragmentActivity() {
         codecMime: String,
         bitrateBps: Int,
         audioFormat: MediaFormat?,
-        audioPackets: List<EncodedPacket>
+        audioPackets: List<EncodedPacket>,
+        cropToFill: Boolean = false
     ) {
         val format = MediaFormat.createVideoFormat(codecMime, width, height).apply {
             setInteger(
@@ -1947,6 +2721,9 @@ class MainActivity : FlutterFragmentActivity() {
             setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
             setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
+            setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
+            setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
         }
 
         val encoder = MediaCodec.createEncoderByType(codecMime)
@@ -1958,11 +2735,24 @@ class MainActivity : FlutterFragmentActivity() {
         var muxerStarted = false
         var videoTrackIdx = -1
         var audioTrackIdx = -1
+        var audioPacketCursor = 0
+        val audInfo = MediaCodec.BufferInfo()
 
         var eglCore: EglCore? = null
         var eglSurface: EGLSurface? = null
         var gpuProgram: GpuTextureProgram? = null
         val textureIds = IntArray(1)
+
+        fun writeInterleavedAudioUpTo(maxPtsUs: Long) {
+            if (!muxerStarted || audioTrackIdx < 0) return
+            while (audioPacketCursor < audioPackets.size) {
+                val pkt = audioPackets[audioPacketCursor]
+                if (pkt.presentationTimeUs > maxPtsUs) break
+                audInfo.set(0, pkt.data.size, pkt.presentationTimeUs, pkt.flags)
+                muxer.writeSampleData(audioTrackIdx, ByteBuffer.wrap(pkt.data), audInfo)
+                audioPacketCursor++
+            }
+        }
 
         try {
             eglCore = EglCore()
@@ -1991,12 +2781,17 @@ class MainActivity : FlutterFragmentActivity() {
                 if (endOfStream) {
                     encoder.signalEndOfInputStream()
                 }
+                var eosTryAgainCount = 0
+                val maxEosRetries = 200
                 while (true) {
-                    val outStatus = encoder.dequeueOutputBuffer(bufferInfo, if (endOfStream) 15_000 else 0)
+                    val outStatus = encoder.dequeueOutputBuffer(bufferInfo, if (endOfStream) 10_000L else 0L)
                     when {
                         outStatus == MediaCodec.INFO_TRY_AGAIN_LATER -> {
                             if (!endOfStream) return
-                            break
+                            eosTryAgainCount++
+                            if (eosTryAgainCount > maxEosRetries) {
+                                break
+                            }
                         }
                         outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                             if (muxerStarted) throw IllegalStateException("Format changed twice")
@@ -2008,6 +2803,7 @@ class MainActivity : FlutterFragmentActivity() {
                             muxerStarted = true
                         }
                         outStatus >= 0 -> {
+                            eosTryAgainCount = 0
                             val outBuf = encoder.getOutputBuffer(outStatus)
                             if (outBuf != null && bufferInfo.size > 0 &&
                                 (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
@@ -2023,6 +2819,7 @@ class MainActivity : FlutterFragmentActivity() {
                                 outBuf.position(bufferInfo.offset)
                                 outBuf.limit(bufferInfo.offset + bufferInfo.size)
                                 muxer.writeSampleData(videoTrackIdx, outBuf, bufferInfo)
+                                writeInterleavedAudioUpTo(bufferInfo.presentationTimeUs)
                             }
                             encoder.releaseOutputBuffer(outStatus, false)
                             if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
@@ -2046,19 +2843,29 @@ class MainActivity : FlutterFragmentActivity() {
                         raf.readFully(pngBytes)
 
                         cachedBitmap?.recycle()
-                        cachedBitmap = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.size)
+                        val decoded = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.size)
+                            ?: throw IllegalStateException("Null frame bitmap at index $srcIdx")
+                        cachedBitmap = decoded
                         cachedSrcFrameIdx = srcIdx
-                    }
 
-                    val bmp = cachedBitmap ?: throw IllegalStateException("Null frame bitmap at index $srcIdx")
+                        // رفع الـ Texture إلى GPU فقط عند تغير الإطار المصدر الفعلي
+                        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
+                        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, decoded, 0)
+                        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+
+                        computeAspectRatioMvpMatrix(
+                            srcWidth = decoded.width,
+                            srcHeight = decoded.height,
+                            dstWidth = width,
+                            dstHeight = height,
+                            cropToFill = cropToFill,
+                            outMatrix = mvpMatrix
+                        )
+                    }
 
                     GLES20.glViewport(0, 0, width, height)
                     GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
                     GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
-
-                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
-                    GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bmp, 0)
-                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
 
                     gpuProgram.draw(texId, mvpMatrix)
 
@@ -2074,14 +2881,7 @@ class MainActivity : FlutterFragmentActivity() {
             cachedBitmap = null
 
             drainEncoder(true)
-
-            if (muxerStarted && audioTrackIdx >= 0) {
-                val audInfo = MediaCodec.BufferInfo()
-                for (pkt in audioPackets) {
-                    audInfo.set(0, pkt.data.size, pkt.presentationTimeUs, pkt.flags)
-                    muxer.writeSampleData(audioTrackIdx, ByteBuffer.wrap(pkt.data), audInfo)
-                }
-            }
+            writeInterleavedAudioUpTo(Long.MAX_VALUE)
         } finally {
             if (textureIds[0] != 0) {
                 GLES20.glDeleteTextures(1, textureIds, 0)
@@ -2101,5 +2901,4 @@ class MainActivity : FlutterFragmentActivity() {
             try { muxer.release() } catch (_: Exception) {}
         }
     }
-
 }
