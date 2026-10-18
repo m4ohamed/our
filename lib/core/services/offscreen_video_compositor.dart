@@ -30,7 +30,7 @@ class OffscreenVideoCompositor {
     void Function(double progress, String status)? onProgress,
     required FutureOr<void> Function(
       int batchStartFrame,
-      List<Uint8List> batchPngFrames,
+      List<Uint8List> batchFrames,
       int width,
       int height,
       int effectiveFps,
@@ -73,9 +73,10 @@ class OffscreenVideoCompositor {
       );
     }
 
-    // حساب عدد الإطارات الفعلي بدقة من المدة ومعدل الإطارات المستهدف دون اقتطاع تعسفي عند 900 إطار (VID-002)
+    // حساب عدد الإطارات الفعلي بدقة من المدة ومعدل الإطارات المستهدف دون اقتطاع تعسفي (VID-002)
     final int totalFrames = math.max(1, (totalDur * effectiveFps).round());
     final int batchSize = config.parallelBatchSize.clamp(2, 8);
+    final int expectedMinBytes = asRawRgba ? (width * height * 4) : 8;
 
     onProgress?.call(
       0.04,
@@ -123,10 +124,12 @@ class OffscreenVideoCompositor {
         cancelToken?.throwIfCancelled(VideoExportStage.rendering);
 
         for (final frameBytes in batchResults) {
-          if (frameBytes.length < 8) {
-            throw const VideoExportException(
+          if (frameBytes.length < expectedMinBytes) {
+            throw VideoExportException(
               stage: VideoExportStage.rendering,
-              message: 'فشل رندر أحد الإطارات الخلفية (بيانات PNG فارغة).',
+              message: asRawRgba
+                  ? 'فشل رندر أحد الإطارات الخلفية (حجم مخزن RGBA غير مكتمل: ${frameBytes.length} من أصل $expectedMinBytes بايت).'
+                  : 'فشل رندر أحد الإطارات الخلفية (بيانات PNG فارغة أو تالفة).',
             );
           }
         }
@@ -173,6 +176,7 @@ class OffscreenVideoCompositor {
       config: config,
       renderFps: renderFps,
       cancelToken: cancelToken,
+      asRawRgba: asRawRgba,
       onProgress: onProgress,
       onBatchReady: (_, batchFrames, _, _, _) {
         allFrames.addAll(batchFrames);
@@ -181,46 +185,91 @@ class OffscreenVideoCompositor {
     return allFrames;
   }
 
+  /// تحميل صورة مقطع واحد من القرص أو الشبكة وتحرير مفكك الترميز الأصلي (`ui.Codec`) فوراً
+  static Future<ui.Image?> _loadSingleClipImage(
+    VideoClipItem clip, {
+    VideoExportCancelToken? cancelToken,
+  }) async {
+    if (clip.sourceType == VideoClipSourceType.romanticCard) {
+      return null;
+    }
+
+    Uint8List? rawBytes;
+    if (clip.localPath != null &&
+        clip.localPath!.isNotEmpty &&
+        File(clip.localPath!).existsSync()) {
+      rawBytes = await File(clip.localPath!).readAsBytes();
+    } else if (clip.networkUrl != null && clip.networkUrl!.isNotEmpty) {
+      final uri = Uri.tryParse(clip.networkUrl!);
+      if (uri != null) {
+        final client = HttpClient()
+          ..connectionTimeout = const Duration(seconds: 15);
+        try {
+          final req = await client
+              .getUrl(uri)
+              .timeout(const Duration(seconds: 15));
+          final resp = await req
+              .close()
+              .timeout(const Duration(seconds: 30));
+          if (resp.statusCode == 200) {
+            final builder = BytesBuilder(copy: false);
+            await for (final chunk in resp.timeout(
+              const Duration(seconds: 30),
+            )) {
+              cancelToken?.throwIfCancelled(VideoExportStage.preparing);
+              builder.add(chunk);
+            }
+            rawBytes = builder.takeBytes();
+          }
+        } finally {
+          client.close(force: true);
+        }
+      }
+    }
+
+    if (rawBytes == null || rawBytes.isEmpty) {
+      return null;
+    }
+
+    final codec = await ui.instantiateImageCodec(rawBytes);
+    try {
+      final frameInfo = await codec.getNextFrame();
+      return frameInfo.image;
+    } finally {
+      codec.dispose();
+    }
+  }
+
   /// تحميل الصور الأصلية كاملة الدقة مباشرة من الملفات بدون أي تصغير إلى أبعاد المعاينة
   static Future<Map<String, ui.Image>> preloadClipImages(
     VideoProjectEntity project, {
     VideoExportCancelToken? cancelToken,
   }) async {
     final Map<String, ui.Image> result = <String, ui.Image>{};
+    final Map<String, ui.Image> sourceCache = <String, ui.Image>{};
     try {
       for (final clip in project.clips) {
         cancelToken?.throwIfCancelled(VideoExportStage.preparing);
         if (clip.sourceType == VideoClipSourceType.romanticCard) continue;
+        final String? cacheKey = (clip.localPath != null && clip.localPath!.isNotEmpty)
+            ? 'file:${clip.localPath!}'
+            : ((clip.networkUrl != null && clip.networkUrl!.isNotEmpty)
+                  ? 'net:${clip.networkUrl!}'
+                  : null);
         try {
-          Uint8List? rawBytes;
-          if (clip.localPath != null &&
-              clip.localPath!.isNotEmpty &&
-              File(clip.localPath!).existsSync()) {
-            rawBytes = await File(clip.localPath!).readAsBytes();
-          } else if (clip.networkUrl != null && clip.networkUrl!.isNotEmpty) {
-            final uri = Uri.tryParse(clip.networkUrl!);
-            if (uri != null) {
-              final client = HttpClient();
-              try {
-                final req = await client.getUrl(uri);
-                final resp = await req.close();
-                if (resp.statusCode == 200) {
-                  final builder = BytesBuilder(copy: false);
-                  await for (final chunk in resp) {
-                    cancelToken?.throwIfCancelled(VideoExportStage.preparing);
-                    builder.add(chunk);
-                  }
-                  rawBytes = builder.takeBytes();
-                }
-              } finally {
-                client.close();
+          if (cacheKey != null && sourceCache.containsKey(cacheKey)) {
+            result[clip.id] = sourceCache[cacheKey]!.clone();
+          } else {
+            final decodedImg = await _loadSingleClipImage(
+              clip,
+              cancelToken: cancelToken,
+            );
+            if (decodedImg != null) {
+              result[clip.id] = decodedImg;
+              if (cacheKey != null) {
+                sourceCache[cacheKey] = decodedImg;
               }
             }
-          }
-          if (rawBytes != null && rawBytes.isNotEmpty) {
-            final codec = await ui.instantiateImageCodec(rawBytes);
-            final frameInfo = await codec.getNextFrame();
-            result[clip.id] = frameInfo.image;
           }
         } catch (e) {
           if (e is VideoExportException) rethrow;
@@ -235,7 +284,8 @@ class OffscreenVideoCompositor {
         if (!result.containsKey(clip.id)) {
           throw VideoExportException(
             stage: VideoExportStage.preparing,
-            message: 'تعذر العثور على ملف الصورة أو الفيديو للمقطع "${clip.title}". يرجى التحقق من وجود الملف أو اتصال الإنترنت.',
+            message:
+                'تعذر العثور على ملف الصورة أو الفيديو للمقطع "${clip.title}". يرجى التحقق من وجود الملف أو اتصال الإنترنت.',
           );
         }
       }
@@ -260,147 +310,190 @@ class OffscreenVideoCompositor {
     required List<double> colorMatrix,
     bool asRawRgba = false,
   }) async {
-    final recorder = ui.PictureRecorder();
-    final double w = width.toDouble();
-    final double h = height.toDouble();
-    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h));
-    // الاعتماد على الضلع الأقصر لضمان ثبات تناسب النصوص والبطاقات عبر نسب 9:16 و 1:1 و 16:9 (VID-015)
-    final double scaleFactor = math.min(w, h) / 360.0;
+    final Map<String, ui.Image> tempLoadedImages = <String, ui.Image>{};
 
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, w, h),
-      Paint()..color = AppTheme.studioCanvasBg,
-    );
+    try {
+      final recorder = ui.PictureRecorder();
+      final double w = width.toDouble();
+      final double h = height.toDouble();
+      final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h));
+      // الاعتماد على الضلع الأقصر لضمان ثبات تناسب النصوص والبطاقات عبر نسب 9:16 و 1:1 و 16:9 (VID-015)
+      final double scaleFactor = math.min(w, h) / 360.0;
 
-    if (project.clips.isNotEmpty) {
-      int activeIdx = 0;
-      double clipStart = 0.0;
-      for (int i = 0; i < project.clips.length; i++) {
-        final d = project.clips[i].durationSeconds;
-        if (timestampSeconds <= clipStart + d ||
-            i == project.clips.length - 1) {
-          activeIdx = i;
-          break;
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h),
+        Paint()..color = AppTheme.studioCanvasBg,
+      );
+
+      if (project.clips.isNotEmpty) {
+        int activeIdx = 0;
+        double clipStart = 0.0;
+        for (int i = 0; i < project.clips.length; i++) {
+          final d = project.clips[i].durationSeconds;
+          if (timestampSeconds <= clipStart + d ||
+              i == project.clips.length - 1) {
+            activeIdx = i;
+            break;
+          }
+          clipStart += d;
         }
-        clipStart += d;
-      }
 
-      final currentClip = project.clips[activeIdx];
-      final localTime = (timestampSeconds - clipStart).clamp(
-        0.0,
-        currentClip.durationSeconds,
-      );
-      final kf = RustVideoBridge.instance.evaluateKeyframes(
-        currentClip.keyframes,
-        localTime,
-      );
-
-      final transDur = currentClip.transitionDuration.clamp(
-        0.1,
-        currentClip.durationSeconds,
-      );
-      final isInTransition =
-          activeIdx > 0 &&
-          currentClip.transition != VideoTransitionType.none &&
-          localTime < transDur;
-      final transProgress = isInTransition
-          ? (localTime / transDur).clamp(0.0, 1.0)
-          : 1.0;
-
-      final bool applyColorFilter = !project.colorGrade.isIdentity;
-      if (applyColorFilter) {
-        canvas.saveLayer(
-          Rect.fromLTWH(0, 0, w, h),
-          Paint()..colorFilter = ColorFilter.matrix(colorMatrix),
+        final currentClip = project.clips[activeIdx];
+        final localTime = (timestampSeconds - clipStart).clamp(
+          0.0,
+          currentClip.durationSeconds,
         );
-      }
-
-      if (isInTransition && activeIdx > 0) {
-        final prevClip = project.clips[activeIdx - 1];
-        final prevKf = RustVideoBridge.instance.evaluateKeyframes(
-          prevClip.keyframes,
-          prevClip.durationSeconds,
+        final kf = RustVideoBridge.instance.evaluateKeyframes(
+          currentClip.keyframes,
+          localTime,
         );
+
+        final transDur = currentClip.transitionDuration.clamp(
+          0.1,
+          currentClip.durationSeconds,
+        );
+        final isInTransition =
+            activeIdx > 0 &&
+            currentClip.transition != VideoTransitionType.none &&
+            localTime < transDur;
+        final transProgress = isInTransition
+            ? (localTime / transDur).clamp(0.0, 1.0)
+            : 1.0;
+
+        // إذا اُستدعيت الدالة بشكل منفرد مع `preloadedImages` فارغة (مثل توليد صورة الغلاف)،
+        // نقوم بتحميل صورة المقطع النشط (والمقطع السابق أثناء الانتقال) مؤقتاً لضمان رسم الصورة الحقيقية
+        if (!preloadedImages.containsKey(currentClip.id) &&
+            currentClip.sourceType != VideoClipSourceType.romanticCard) {
+          try {
+            final img = await _loadSingleClipImage(currentClip);
+            if (img != null) {
+              tempLoadedImages[currentClip.id] = img;
+            }
+          } catch (_) {}
+        }
+        if (isInTransition && activeIdx > 0) {
+          final prevClip = project.clips[activeIdx - 1];
+          if (!preloadedImages.containsKey(prevClip.id) &&
+              !tempLoadedImages.containsKey(prevClip.id) &&
+              prevClip.sourceType != VideoClipSourceType.romanticCard) {
+            try {
+              final img = await _loadSingleClipImage(prevClip);
+              if (img != null) {
+                tempLoadedImages[prevClip.id] = img;
+              }
+            } catch (_) {}
+          }
+        }
+
+        final Map<String, ui.Image> effectiveImages = tempLoadedImages.isEmpty
+            ? preloadedImages
+            : <String, ui.Image>{...preloadedImages, ...tempLoadedImages};
+
+        final bool applyColorFilter = !project.colorGrade.isIdentity;
+        if (applyColorFilter) {
+          canvas.saveLayer(
+            Rect.fromLTWH(0, 0, w, h),
+            Paint()..colorFilter = ColorFilter.matrix(colorMatrix),
+          );
+        }
+
+        if (isInTransition && activeIdx > 0) {
+          final prevClip = project.clips[activeIdx - 1];
+          final prevKf = RustVideoBridge.instance.evaluateKeyframes(
+            prevClip.keyframes,
+            prevClip.durationSeconds,
+          );
+          _drawClipLayer(
+            canvas: canvas,
+            clip: prevClip,
+            kf: prevKf,
+            width: w,
+            height: h,
+            scaleFactor: scaleFactor,
+            preloadedImages: effectiveImages,
+            extraOpacity: (1.0 - transProgress).clamp(0.0, 1.0),
+            transition: VideoTransitionType.none,
+            transitionProgress: 1.0,
+          );
+        }
+
         _drawClipLayer(
           canvas: canvas,
-          clip: prevClip,
-          kf: prevKf,
+          clip: currentClip,
+          kf: kf,
           width: w,
           height: h,
           scaleFactor: scaleFactor,
-          preloadedImages: preloadedImages,
-          extraOpacity: (1.0 - transProgress).clamp(0.0, 1.0),
-          transition: VideoTransitionType.none,
-          transitionProgress: 1.0,
+          preloadedImages: effectiveImages,
+          extraOpacity: 1.0,
+          transition: isInTransition
+              ? currentClip.transition
+              : VideoTransitionType.none,
+          transitionProgress: transProgress,
         );
+
+        if (applyColorFilter) {
+          canvas.restore();
+        }
       }
 
-      _drawClipLayer(
-        canvas: canvas,
-        clip: currentClip,
-        kf: kf,
-        width: w,
-        height: h,
-        scaleFactor: scaleFactor,
-        preloadedImages: preloadedImages,
-        extraOpacity: 1.0,
-        transition: isInTransition
-            ? currentClip.transition
-            : VideoTransitionType.none,
-        transitionProgress: transProgress,
-      );
-
-      if (applyColorFilter) {
-        canvas.restore();
+      final vignetteAmount = project.colorGrade.vignette.clamp(0.0, 0.85);
+      if (vignetteAmount > 0.01) {
+        final center = Offset(w * 0.5, h * 0.5);
+        final radius = math.sqrt((w * 0.5) * (w * 0.5) + (h * 0.5) * (h * 0.5));
+        final vigPaint = Paint()
+          ..shader = ui.Gradient.radial(
+            center,
+            radius,
+            [
+              const Color(0x00000000),
+              Color.fromRGBO(0, 0, 0, vignetteAmount),
+            ],
+            const [0.45, 1.0],
+          );
+        canvas.drawRect(Rect.fromLTWH(0, 0, w, h), vigPaint);
       }
-    }
 
-    final vignetteAmount = project.colorGrade.vignette.clamp(0.0, 0.85);
-    if (vignetteAmount > 0.01) {
-      final center = Offset(w * 0.5, h * 0.5);
-      final radius = math.max(w, h) * 0.65;
-      final vigPaint = Paint()
-        ..shader = ui.Gradient.radial(
-          center,
-          radius,
-          [
-            const Color(0x00000000),
-            Color.fromRGBO(0, 0, 0, vignetteAmount),
-          ],
-          const [0.45, 1.0],
-        );
-      canvas.drawRect(Rect.fromLTWH(0, 0, w, h), vigPaint);
-    }
-
-    for (final txt in project.textTracks) {
-      if (timestampSeconds >= txt.startTime &&
-          timestampSeconds <= txt.endTime) {
-        _drawTextTrack(
-          canvas: canvas,
-          track: txt,
-          localTime: timestampSeconds - txt.startTime,
-          width: w,
-          height: h,
-          scaleFactor: scaleFactor,
-        );
+      for (final txt in project.textTracks) {
+        if (timestampSeconds >= txt.startTime &&
+            timestampSeconds <= txt.endTime) {
+          _drawTextTrack(
+            canvas: canvas,
+            track: txt,
+            localTime: timestampSeconds - txt.startTime,
+            width: w,
+            height: h,
+            scaleFactor: scaleFactor,
+          );
+        }
       }
-    }
 
-    final picture = recorder.endRecording();
-    final img = await picture.toImage(width, height);
-    try {
-      final byteData = await img.toByteData(format: asRawRgba ? ui.ImageByteFormat.rawRgba : ui.ImageByteFormat.png);
-      if (byteData != null) {
-        return byteData.buffer.asUint8List(
-          byteData.offsetInBytes,
-          byteData.lengthInBytes,
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(width, height);
+      try {
+        final byteData = await img.toByteData(
+          format: asRawRgba
+              ? ui.ImageByteFormat.rawRgba
+              : ui.ImageByteFormat.png,
         );
+        if (byteData != null) {
+          return byteData.buffer.asUint8List(
+            byteData.offsetInBytes,
+            byteData.lengthInBytes,
+          );
+        }
+      } finally {
+        picture.dispose();
+        img.dispose();
       }
+      return Uint8List(0);
     } finally {
-      picture.dispose();
-      img.dispose();
+      for (final tempImg in tempLoadedImages.values) {
+        try {
+          tempImg.dispose();
+        } catch (_) {}
+      }
     }
-    return Uint8List(0);
   }
 
   static void _drawClipLayer({
@@ -446,6 +539,7 @@ class OffscreenVideoCompositor {
     if (opacity <= 0.005) return;
 
     canvas.save();
+    bool savedLayer = false;
     if (transition == VideoTransitionType.dreamyBlur &&
         transitionProgress < 0.99) {
       final sigma = (1.0 - transitionProgress) * 14.0 * scaleFactor;
@@ -453,13 +547,19 @@ class OffscreenVideoCompositor {
         Rect.fromLTWH(0, 0, width, height),
         Paint()
           ..color = Color.fromRGBO(255, 255, 255, opacity)
-          ..imageFilter = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+          ..imageFilter = ui.ImageFilter.blur(
+            sigmaX: sigma,
+            sigmaY: sigma,
+            tileMode: TileMode.clamp,
+          ),
       );
+      savedLayer = true;
     } else if (opacity < 0.999) {
       canvas.saveLayer(
         Rect.fromLTWH(0, 0, width, height),
         Paint()..color = Color.fromRGBO(255, 255, 255, opacity),
       );
+      savedLayer = true;
     }
 
     canvas.translate(width * 0.5 + tx, height * 0.5 + ty);
@@ -528,9 +628,7 @@ class OffscreenVideoCompositor {
       );
     }
 
-    if ((transition == VideoTransitionType.dreamyBlur &&
-            transitionProgress < 0.99) ||
-        opacity < 0.999) {
+    if (savedLayer) {
       canvas.restore();
     }
     canvas.restore();
