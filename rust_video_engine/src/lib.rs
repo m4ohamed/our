@@ -1,3 +1,4 @@
+
 // rust_video_engine/src/lib.rs
 // محرك Rust احترافي مستلهم من معمارية FilmCraft (storytold/filmcraft) و EffectCraft (storytold/effectcraft)
 
@@ -724,7 +725,7 @@ pub unsafe extern "C" fn rust_rgba_batch_to_bt709_nv12(
 }
 
 #[inline]
-fn dst_frame_chunk<'a>(chunk: &'a mut [u8], size: usize) -> std::slice::ChunksMut<'a, u8> {
+fn dst_frame_chunk<'a>(chunk: &'a mut [u8], size: usize) -> std::slice::ChunksExactMut<'a, u8> {
     chunk.chunks_exact_mut(size)
 }
 
