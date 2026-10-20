@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/cloudinary_service.dart';
 import '../../core/services/onesignal_service.dart';
+import '../../data/mappers/event_mapper.dart';
 import '../../data/models/media_file_hive_model.dart';
 import '../../data/models/timeline_event_hive_model.dart';
 import '../../data/repositories/firestore_media_repository.dart';
@@ -19,7 +20,7 @@ import '../../domain/entities/entities.dart';
 import '../../domain/entities/timeline_event_entity.dart';
 import '../../domain/repositories/repositories.dart';
 
-// ─── Infrastructure Providers ────────────────────────────────────────────────
+// 鈹€鈹€鈹€ Infrastructure Providers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('Must be overridden in ProviderScope');
@@ -40,7 +41,7 @@ final oneSignalServiceProvider = Provider<OneSignalService>((ref) {
   return OneSignalService(prefs, firestore);
 });
 
-/// مزود لهوية الشريك على هذا الجهاز ('p1' = محمد | 'p2' = سارة)
+/// 賲夭賵丿 賱賴賵賷丞 丕賱卮乇賷賰 毓賱賶 賴匕丕 丕賱噩賴丕夭 ('p1' = 賲丨賲丿 | 'p2' = 爻丕乇丞)
 class MyPartnerRoleNotifier extends Notifier<String> {
   @override
   String build() {
@@ -58,7 +59,7 @@ final myPartnerRoleProvider = NotifierProvider<MyPartnerRoleNotifier, String>(
   MyPartnerRoleNotifier.new,
 );
 
-/// تدفق مباشر لحالة اتصال الشريك ونقاط التناغم من Cloud Firestore
+/// 鬲丿賮賯 賲亘丕卮乇 賱丨丕賱丞 丕鬲氐丕賱 丕賱卮乇賷賰 賵賳賯丕胤 丕賱鬲賳丕睾賲 賲賳 Cloud Firestore
 final coupleOnlineDocStreamProvider =
     StreamProvider<Map<String, dynamic>?>((ref) {
       final firestore = ref.watch(firestoreInstanceProvider);
@@ -67,7 +68,8 @@ final coupleOnlineDocStreamProvider =
           .collection(AppConstants.firestoreCoupleDoc)
           .doc('main_couple')
           .snapshots()
-          .map((snap) => snap.data());
+          .map((snap) => snap.data())
+          .handleError((_) {});
     });
 
 final hiveEventsBoxProvider = Provider<Box<TimelineEventHiveModel>>((ref) {
@@ -78,7 +80,7 @@ final hiveMediaBoxProvider = Provider<Box<MediaFileHiveModel>>((ref) {
   return Hive.box<MediaFileHiveModel>(AppConstants.mediaBoxName);
 });
 
-// ─── Repository Providers (Cloud Firestore + Cloudinary + Hive Cache) ────────
+// 鈹€鈹€鈹€ Repository Providers (Cloud Firestore + Cloudinary + Hive Cache) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 final timelineRepositoryProvider = Provider<TimelineRepository>((ref) {
   final box = ref.watch(hiveEventsBoxProvider);
@@ -125,7 +127,7 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   return repo;
 });
 
-// ─── Settings Provider ────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€ Settings Provider 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 class SettingsNotifier extends AsyncNotifier<AppSettingsEntity> {
   @override
@@ -269,7 +271,7 @@ final localeProvider = Provider<Locale>((ref) {
   return Locale(lang);
 });
 
-// ─── Timeline Providers ───────────────────────────────────────────────────────
+// 鈹€鈹€鈹€ Timeline Providers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 class TimelineSortNotifier extends Notifier<bool> {
   @override
@@ -282,70 +284,65 @@ final timelineSortAscendingProvider =
     NotifierProvider<TimelineSortNotifier, bool>(TimelineSortNotifier.new);
 
 class TimelineNotifier extends AsyncNotifier<List<TimelineEventEntity>> {
+  List<TimelineEventEntity> _sortEvents(
+    List<TimelineEventEntity> events,
+    bool isAscending,
+  ) {
+    return [...events]..sort(
+      (a, b) => isAscending ? a.date.compareTo(b.date) : b.date.compareTo(a.date),
+    );
+  }
+
+  List<TimelineEventEntity> _fallbackFromHive(bool isAscending) {
+    final box = ref.read(hiveEventsBoxProvider);
+    final events = box.values.map((m) => m.toEntity()).toList();
+    return _sortEvents(events, isAscending);
+  }
+
   @override
   Future<List<TimelineEventEntity>> build() async {
     final repo = ref.watch(timelineRepositoryProvider);
     final isAscending = ref.watch(timelineSortAscendingProvider);
 
     final sub = repo.watchEvents().listen((events) {
-      if (state.hasValue) {
-        final sorted = [...events]
-          ..sort(
-            (a, b) =>
-                isAscending ? a.date.compareTo(b.date) : b.date.compareTo(a.date),
-          );
-        state = AsyncData(sorted);
-      }
+      state = AsyncData(_sortEvents(events, isAscending));
     });
     ref.onDispose(sub.cancel);
 
     final result = await repo.getAllEvents();
     return result.when(
-      success: (events) {
-        final sorted = [...events]
-          ..sort(
-            (a, b) =>
-                isAscending ? a.date.compareTo(b.date) : b.date.compareTo(a.date),
-          );
-        return sorted;
-      },
-      failure: (e) => throw e,
+      success: (events) => _sortEvents(events, isAscending),
+      failure: (_) => _fallbackFromHive(isAscending),
     );
   }
 
   Future<void> addEvent(TimelineEventEntity event) async {
     final repo = ref.read(timelineRepositoryProvider);
     final result = await repo.saveEvent(event);
-    result.when(
-      success: (_) {
-        _refresh();
-        final oneSignal = ref.read(oneSignalServiceProvider);
+    await _refresh();
+    if (result.isSuccess) {
+      final oneSignal = ref.read(oneSignalServiceProvider);
+      unawaited(
         oneSignal.sendNotificationToPartner(
-          title: 'ذكرى جديدة في قصتنا 💕',
-          message: 'أضاف ${oneSignal.myName} حدثاً جديداً: "${event.title}" ${event.icon}',
+          title: '匕賰乇賶 噩丿賷丿丞 賮賷 賯氐鬲賳丕 馃挄',
+          message:
+              '兀囟丕賮 ${oneSignal.myName} 丨丿孬丕賸 噩丿賷丿丕賸: "${event.title}" ${event.icon}',
           category: 'timeline',
-        );
-      },
-      failure: (e) => state = AsyncError(e, StackTrace.current),
-    );
+        ),
+      );
+    }
   }
 
   Future<void> updateEvent(TimelineEventEntity event) async {
     final repo = ref.read(timelineRepositoryProvider);
-    final result = await repo.saveEvent(event);
-    result.when(
-      success: (_) => _refresh(),
-      failure: (e) => state = AsyncError(e, StackTrace.current),
-    );
+    await repo.saveEvent(event);
+    await _refresh();
   }
 
   Future<void> deleteEvent(String id) async {
     final repo = ref.read(timelineRepositoryProvider);
-    final result = await repo.deleteEvent(id);
-    result.when(
-      success: (_) => _refresh(),
-      failure: (e) => state = AsyncError(e, StackTrace.current),
-    );
+    await repo.deleteEvent(id);
+    await _refresh();
   }
 
   Future<void> deleteAll() async {
@@ -359,15 +356,8 @@ class TimelineNotifier extends AsyncNotifier<List<TimelineEventEntity>> {
     final isAscending = ref.read(timelineSortAscendingProvider);
     final result = await repo.getAllEvents();
     state = result.when(
-      success: (events) {
-        final sorted = [...events]
-          ..sort(
-            (a, b) =>
-                isAscending ? a.date.compareTo(b.date) : b.date.compareTo(a.date),
-          );
-        return AsyncData(sorted);
-      },
-      failure: (e) => AsyncError(e, StackTrace.current),
+      success: (events) => AsyncData(_sortEvents(events, isAscending)),
+      failure: (_) => AsyncData(_fallbackFromHive(isAscending)),
     );
   }
 }
