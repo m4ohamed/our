@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'generated/l10n.dart';
 import 'core/constants/app_constants.dart';
 import 'core/services/firebase_online_service.dart';
@@ -18,6 +20,7 @@ import 'domain/entities/entities.dart';
 import 'presentation/providers/app_providers.dart';
 import 'presentation/screens/splash_screen.dart';
 import 'theme/app_theme.dart';
+import 'generated/l10n.dart';
 
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -41,7 +44,14 @@ void main() async {
   // تهيئة SharedPreferences
   final prefs = await SharedPreferences.getInstance();
 
-  // تهيئة الاتصال السحابي المباشر (يقرأ google-services.json تلقائياً مع fallback أونلاين مضمون)
+  // تهيئة Firebase الرسمي عبر إعدادات المنصة المباشرة (DefaultFirebaseOptions)
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (_) {}
+
+  // تهيئة الاتصال السحابي المباشر وإعداد كاش Cloud Firestore
   final firestore = await FirebaseOnlineService.initialize(prefs);
 
   // تهيئة إشعارات OneSignal وتسجيل حالة الاتصال أونلاين
