@@ -17,6 +17,7 @@ class FirestoreTimelineRepository implements TimelineRepository {
   final HiveTimelineRepository _localCache;
   final CloudinaryService _cloudinary;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _firestoreSub;
+  StreamSubscription<List<TimelineEventEntity>>? _localSub;
   final _streamController =
       StreamController<List<TimelineEventEntity>>.broadcast();
 
@@ -34,33 +35,56 @@ class FirestoreTimelineRepository implements TimelineRepository {
       _firestore?.collection(AppConstants.firestoreEventsCollection);
 
   void _initRealtimeSync() {
-    if (_collection == null) {
-      _localCache.watchEvents().listen(_streamController.add);
-      return;
-    }
+    // الاستماع الدائم للكاش المحلي لضمان تحديث الواجهة فوراً عند أي إضافة أو تعديل محلي
+    _localSub = _localCache.watchEvents().listen((localEvents) {
+      if (!_streamController.isClosed) {
+        _streamController.add(localEvents);
+      }
+    });
+
+    if (_collection == null) return;
 
     _firestoreSub = _collection!
         .orderBy('date')
         .snapshots()
         .listen(
           (snapshot) async {
-            // معالجة الحذف الفوري بين الهواتف المتصلة
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.removed) {
-                await _localCache.deleteEvent(change.doc.id);
+            try {
+              // معالجة الحذف الفوري بين الهواتف المتصلة
+              for (final change in snapshot.docChanges) {
+                if (change.type == DocumentChangeType.removed) {
+                  await _localCache.deleteEvent(change.doc.id);
+                }
               }
-            }
 
-            final events = snapshot.docs.map(_docToEntity).toList();
-            // تحديث الكاش المحلي في Hive
-            for (final event in events) {
-              await _localCache.saveEvent(event);
-            }
-            _streamController.add(events);
+              final remoteEvents = snapshot.docs.map(_docToEntity).toList();
+              // دمج البيانات السحابية مع الكاش المحلي مع الحفاظ على مسارات الصور المحلية الصالحة
+              for (final remoteEvent in remoteEvents) {
+                final existingRes = await _localCache.getEventById(
+                  remoteEvent.id,
+                );
+                final existing = existingRes.getOrNull();
+                final preservedLocalPath =
+                    (existing?.localImagePath != null &&
+                        File(existing!.localImagePath!).existsSync())
+                    ? existing.localImagePath
+                    : remoteEvent.localImagePath;
+
+                await _localCache.saveEvent(
+                  remoteEvent.copyWith(localImagePath: preservedLocalPath),
+                );
+              }
+
+              final merged = await _localCache.getAllEvents();
+              if (merged.isSuccess && !_streamController.isClosed) {
+                _streamController.add(merged.data);
+              }
+            } catch (_) {}
           },
           onError: (_) async {
+            // في حال رفض صلاحيات Firestore (permission-denied) أو انقطاع الإنترنت، نعتمد على الكاش المحلي
             final cached = await _localCache.getAllEvents();
-            if (cached.isSuccess) {
+            if (cached.isSuccess && !_streamController.isClosed) {
               _streamController.add(cached.data);
             }
           },
@@ -85,16 +109,18 @@ class FirestoreTimelineRepository implements TimelineRepository {
             (localEvent.imageUrl == null || localEvent.imageUrl!.isEmpty) &&
             File(localEvent.localImagePath!).existsSync() &&
             _cloudinary.isConfigured) {
-          final uploadRes = await _cloudinary.uploadImage(
-            File(localEvent.localImagePath!),
-          );
-          if (uploadRes.isSuccess) {
-            eventToPush = localEvent.copyWith(
-              imageUrl: uploadRes.data.secureUrl,
+          try {
+            final uploadRes = await _cloudinary.uploadImage(
+              File(localEvent.localImagePath!),
             );
-            await _localCache.saveEvent(eventToPush);
-            needsPush = true;
-          }
+            if (uploadRes.isSuccess) {
+              eventToPush = localEvent.copyWith(
+                imageUrl: uploadRes.data.secureUrl,
+              );
+              await _localCache.saveEvent(eventToPush);
+              needsPush = true;
+            }
+          } catch (_) {}
         }
 
         if (needsPush) {
@@ -104,33 +130,44 @@ class FirestoreTimelineRepository implements TimelineRepository {
           );
         }
       }
-    } catch (_) {}
+    } catch (_) {
+      // تجاهل أخطاء الصلاحيات أو الشبكة بهدوء دون تعطيل التطبيق
+    }
   }
 
   @override
   Future<Result<List<TimelineEventEntity>>> getAllEvents() async {
+    // 1. نضمن دائماً تهيئة الكاش المحلي (والبيانات التجريبية إن كانت مفعلة) أولاً
+    final localInitial = await _localCache.getAllEvents();
     if (_collection == null) {
-      return _localCache.getAllEvents();
+      return localInitial;
     }
 
     try {
-      // أولاً: دفع أي عناصر محلية معلقة للسحابة
+      // 2. محاولة دفع العناصر المحلية المعلقة للسحابة
       await syncPendingToCloud();
 
       final snapshot = await _collection!.orderBy('date').get();
-      if (snapshot.docs.isEmpty) {
-        return await _localCache.getAllEvents();
+      if (snapshot.docs.isNotEmpty) {
+        final remoteEvents = snapshot.docs.map(_docToEntity).toList();
+        for (final remoteEvent in remoteEvents) {
+          final existingRes = await _localCache.getEventById(remoteEvent.id);
+          final existing = existingRes.getOrNull();
+          final preservedLocalPath =
+              (existing?.localImagePath != null &&
+                  File(existing!.localImagePath!).existsSync())
+              ? existing.localImagePath
+              : remoteEvent.localImagePath;
+
+          await _localCache.saveEvent(
+            remoteEvent.copyWith(localImagePath: preservedLocalPath),
+          );
+        }
       }
 
-      final events = snapshot.docs.map(_docToEntity).toList()
-        ..sort((a, b) => a.date.compareTo(b.date));
-
-      for (final e in events) {
-        await _localCache.saveEvent(e);
-      }
-      return Success(events);
-    } catch (_) {
       return await _localCache.getAllEvents();
+    } catch (_) {
+      return localInitial;
     }
   }
 
@@ -156,29 +193,41 @@ class FirestoreTimelineRepository implements TimelineRepository {
     try {
       var eventToSave = event;
 
+      // محاولة رفع الصورة إلى Cloudinary إن كان مضبوطاً، مع عدم تعطيل الحفظ المحلي عند فشل الرفع
       if (event.localImagePath != null &&
           File(event.localImagePath!).existsSync() &&
           _cloudinary.isConfigured) {
-        final uploadResult = await _cloudinary.uploadImage(
-          File(event.localImagePath!),
-        );
-        if (uploadResult.isSuccess) {
-          eventToSave = event.copyWith(imageUrl: uploadResult.data.secureUrl);
-        }
+        try {
+          final uploadResult = await _cloudinary.uploadImage(
+            File(event.localImagePath!),
+          );
+          if (uploadResult.isSuccess) {
+            eventToSave = event.copyWith(
+              imageUrl: uploadResult.data.secureUrl,
+            );
+          }
+        } catch (_) {}
       }
 
-      // 1. حفظ في الكاش المحلي فوراً
+      // 1. حفظ في الكاش المحلي (Hive) فوراً — هذا يضمن عدم ضياع الذكرى أبداً
       final localSaved = await _localCache.saveEvent(eventToSave);
       final finalEvent = localSaved.getOrElse(eventToSave);
 
-      // 2. حفظ في سيرفر Cloud Firestore
+      // 2. محاولة المزامنة مع Cloud Firestore بشكل معزول حتى لا ينهار التطبيق عند خطأ permission-denied
       if (_collection != null) {
-        await _collection!.doc(finalEvent.id).set(_entityToMap(finalEvent));
+        try {
+          await _collection!.doc(finalEvent.id).set(
+            _entityToMap(finalEvent),
+            SetOptions(merge: true),
+          );
+        } catch (_) {
+          // في حال رفض صلاحيات Firestore أو انقطاع الإنترنت، تظل الذكرى محفوظة محلياً وتُزامن لاحقاً
+        }
       }
 
       return Success(finalEvent);
     } catch (e) {
-      return Failure(StorageException('فشل حفظ الحدث في Firestore: $e'));
+      return Failure(StorageException('فشل حفظ الحدث محلياً: $e'));
     }
   }
 
@@ -187,11 +236,13 @@ class FirestoreTimelineRepository implements TimelineRepository {
     try {
       await _localCache.deleteEvent(id);
       if (_collection != null) {
-        await _collection!.doc(id).delete();
+        try {
+          await _collection!.doc(id).delete();
+        } catch (_) {}
       }
       return const Success(null);
     } catch (e) {
-      return Failure(StorageException('فشل حذف الحدث من Firestore: $e'));
+      return Failure(StorageException('فشل حذف الحدث: $e'));
     }
   }
 
@@ -200,16 +251,18 @@ class FirestoreTimelineRepository implements TimelineRepository {
     try {
       await _localCache.deleteAllEvents();
       if (_collection != null && _firestore != null) {
-        final snapshot = await _collection!.get();
-        final batch = _firestore.batch();
-        for (final doc in snapshot.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
+        try {
+          final snapshot = await _collection!.get();
+          final batch = _firestore.batch();
+          for (final doc in snapshot.docs) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+        } catch (_) {}
       }
       return const Success(null);
     } catch (e) {
-      return Failure(StorageException('فشل مسح الأحداث من Firestore: $e'));
+      return Failure(StorageException('فشل مسح الأحداث: $e'));
     }
   }
 
@@ -258,6 +311,7 @@ class FirestoreTimelineRepository implements TimelineRepository {
 
   void dispose() {
     _firestoreSub?.cancel();
+    _localSub?.cancel();
     _streamController.close();
   }
 }
