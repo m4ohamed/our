@@ -1,7 +1,7 @@
-// lib/core/services/firebase_online_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../firebase_options.dart';
 
 /// خدمة تهيئة الاتصال السحابي المباشر (Firebase & Cloud Firestore)
 /// متوافقة مع مشروع Firebase الخاص بك (our-love-story-2026) وملف google-services.json
@@ -52,21 +52,31 @@ class FirebaseOnlineService {
       } catch (_) {}
     }
 
-    // المحاولة القياسية عبر ملف google-services.json الموجود في android/app/
+    // المحاولة القياسية عبر DefaultFirebaseOptions المتوافقة مع جميع المنصات
     try {
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp();
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
       }
       return _configureFirestore();
     } catch (_) {
-      // في حال التشغيل على الويب/سطح المكتب نستخدم إعدادات مشروع our-love-story-2026 المدمجة
+      // المحاولة الاحتياطية عبر ملف إعدادات المنصة الأصلي (مثل google-services.json)
       try {
         if (Firebase.apps.isEmpty) {
-          await Firebase.initializeApp(options: fallbackFirebaseOptions);
+          await Firebase.initializeApp();
         }
         return _configureFirestore();
       } catch (_) {
-        return null;
+        // في حال فشل كل ما سبق نستخدم fallbackFirebaseOptions
+        try {
+          if (Firebase.apps.isEmpty) {
+            await Firebase.initializeApp(options: fallbackFirebaseOptions);
+          }
+          return _configureFirestore();
+        } catch (_) {
+          return null;
+        }
       }
     }
   }
